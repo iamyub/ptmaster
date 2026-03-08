@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "피티마스터",
+    "slug": "ptmaster",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "피티마스터",
+      "shortName": "피티마스터",
+      "description": "운동 기록 & 루틴 관리 앱",
+      "themeColor": "#4F8EF7",
+      "backgroundColor": "#F5F6FA",
+      "lang": "ko"
+    }
+  }
+}
