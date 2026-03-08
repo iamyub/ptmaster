@@ -4,7 +4,34 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+// ── 에러 바운더리 (웹 흰 화면 방지) ──────────────────────────
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#FF5C5C', marginBottom: 12 }}>
+            앱 오류 발생
+          </Text>
+          <Text style={{ fontSize: 13, color: '#555', textAlign: 'center' }}>
+            {this.state.error.message}
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import { RootStackParamList, MainTabParamList } from './src/types';
 import HomeScreen from './src/screens/HomeScreen';
@@ -75,6 +102,8 @@ function MainTabs() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
+      <SafeAreaProvider>
     <NavigationContainer>
       <StatusBar style="dark" />
       <Stack.Navigator
@@ -107,5 +136,7 @@ export default function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
