@@ -68,8 +68,12 @@ export default function HistoryScreen() {
         text: '삭제',
         style: 'destructive',
         onPress: async () => {
-          await deleteWorkout(id);
-          setWorkouts((prev) => prev.filter((w) => w.id !== id));
+          try {
+            await deleteWorkout(id);
+            setWorkouts((prev) => prev.filter((w) => w.id !== id));
+          } catch {
+            showAlert('오류', '운동 기록 삭제에 실패했습니다.');
+          }
         },
       },
     ]);

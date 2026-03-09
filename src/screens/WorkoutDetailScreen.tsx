@@ -256,11 +256,15 @@ export default function WorkoutDetailScreen() {
 
   const handleSave = async () => {
     if (!workout) return;
-    const updated: Workout = { ...workout, exercises: editedExercises };
-    await updateWorkout(updated);
-    setWorkout(updated);
-    setHasChanges(false);
-    showAlert('저장 완료', '운동 기록이 저장되었습니다.');
+    try {
+      const updated: Workout = { ...workout, exercises: editedExercises };
+      await updateWorkout(updated);
+      setWorkout(updated);
+      setHasChanges(false);
+      showAlert('저장 완료', '운동 기록이 저장되었습니다.');
+    } catch {
+      showAlert('오류', '운동 기록 저장에 실패했습니다.');
+    }
   };
 
   const handleDelete = () => {
@@ -271,8 +275,12 @@ export default function WorkoutDetailScreen() {
         text: '삭제',
         style: 'destructive',
         onPress: async () => {
-          await deleteWorkout(workoutId);
-          navigation.goBack();
+          try {
+            await deleteWorkout(workoutId);
+            navigation.goBack();
+          } catch {
+            showAlert('오류', '운동 기록 삭제에 실패했습니다.');
+          }
         },
       },
     ]);

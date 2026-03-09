@@ -145,8 +145,12 @@ export default function HomeScreen() {
         text: '삭제',
         style: 'destructive',
         onPress: async () => {
-          await deleteWorkout(id);
-          setRecentWorkouts((prev) => prev.filter((w) => w.id !== id));
+          try {
+            await deleteWorkout(id);
+            setRecentWorkouts((prev) => prev.filter((w) => w.id !== id));
+          } catch {
+            showAlert('오류', '운동 기록 삭제에 실패했습니다.');
+          }
         },
       },
     ]);
@@ -179,8 +183,12 @@ export default function HomeScreen() {
       exercises,
     };
 
-    await addWorkout(newWorkout);
-    navigation.navigate('WorkoutDetail', { workoutId: newWorkout.id });
+    try {
+      await addWorkout(newWorkout);
+      navigation.navigate('WorkoutDetail', { workoutId: newWorkout.id });
+    } catch {
+      showAlert('오류', '운동 시작에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   return (

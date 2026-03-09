@@ -144,17 +144,22 @@ export default function AddWorkoutScreen() {
       return;
     }
     setSaving(true);
-    const workout: Workout = {
-      id: generateId(),
-      title: title.trim(),
-      date: new Date().toISOString(),
-      duration: duration ? Number(duration) : undefined,
-      exercises,
-      notes: notes.trim() || undefined,
-    };
-    await addWorkout(workout);
-    setSaving(false);
-    navigation.goBack();
+    try {
+      const workout: Workout = {
+        id: generateId(),
+        title: title.trim(),
+        date: new Date().toISOString(),
+        duration: duration ? Number(duration) : undefined,
+        exercises,
+        notes: notes.trim() || undefined,
+      };
+      await addWorkout(workout);
+      navigation.goBack();
+    } catch {
+      showAlert('오류', '운동 기록 저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

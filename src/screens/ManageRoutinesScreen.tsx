@@ -387,25 +387,29 @@ export default function ManageRoutinesScreen() {
       showAlert('알림', '운동을 하나 이상 추가해주세요.');
       return;
     }
-    if (formMode === 'add') {
-      const newRoutine: Routine = {
-        id: generateId(),
-        name: routineName.trim(),
-        exercises: formExercises,
-      };
-      await addRoutine(newRoutine);
-      setRoutines((prev) => [...prev, newRoutine]);
-    } else if (formMode === 'edit' && editingRoutine) {
-      const updated: Routine = {
-        ...editingRoutine,
-        name: routineName.trim(),
-        exercises: formExercises,
-      };
-      await updateRoutine(updated);
-      setRoutines((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    try {
+      if (formMode === 'add') {
+        const newRoutine: Routine = {
+          id: generateId(),
+          name: routineName.trim(),
+          exercises: formExercises,
+        };
+        await addRoutine(newRoutine);
+        setRoutines((prev) => [...prev, newRoutine]);
+      } else if (formMode === 'edit' && editingRoutine) {
+        const updated: Routine = {
+          ...editingRoutine,
+          name: routineName.trim(),
+          exercises: formExercises,
+        };
+        await updateRoutine(updated);
+        setRoutines((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      }
+      closeForm();
+      navigation.goBack();
+    } catch {
+      showAlert('오류', '루틴 저장에 실패했습니다.');
     }
-    closeForm();
-    navigation.goBack();
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -415,9 +419,13 @@ export default function ManageRoutinesScreen() {
         text: '삭제',
         style: 'destructive',
         onPress: async () => {
-          await deleteRoutine(id);
-          setRoutines((prev) => prev.filter((r) => r.id !== id));
-          if (editingRoutine?.id === id) closeForm();
+          try {
+            await deleteRoutine(id);
+            setRoutines((prev) => prev.filter((r) => r.id !== id));
+            if (editingRoutine?.id === id) closeForm();
+          } catch {
+            showAlert('오류', '루틴 삭제에 실패했습니다.');
+          }
         },
       },
     ]);
