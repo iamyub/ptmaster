@@ -27,6 +27,7 @@ import {
 import { ko } from 'date-fns/locale';
 import { RootStackParamList, Workout } from '../types';
 import { loadWorkouts, deleteWorkout } from '../storage/workoutStorage';
+import { useTheme } from '../context/ThemeContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'daily' | 'weekly' | 'monthly';
@@ -34,6 +35,7 @@ type ViewMode = 'daily' | 'weekly' | 'monthly';
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function HistoryScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
@@ -81,20 +83,20 @@ export default function HistoryScreen() {
 
   // ── 세그먼트 컨트롤 ──
   const SegmentControl = () => (
-    <View style={styles.segmentWrapper}>
+    <View style={[styles.segmentWrapper, { backgroundColor: colors.segmentBg }]}>
       {(['daily', 'weekly', 'monthly'] as ViewMode[]).map((mode) => {
         const labels: Record<ViewMode, string> = { daily: '일별', weekly: '주별', monthly: '월별' };
         const active = viewMode === mode;
         return (
           <TouchableOpacity
             key={mode}
-            style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+            style={[styles.segmentBtn, active && [styles.segmentBtnActive, { backgroundColor: colors.card }]]}
             onPress={() => {
               setViewMode(mode);
               setSelectedDate(null);
             }}
           >
-            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+            <Text style={[styles.segmentText, { color: colors.textSub }, active && styles.segmentTextActive]}>
               {labels[mode]}
             </Text>
           </TouchableOpacity>
@@ -106,14 +108,14 @@ export default function HistoryScreen() {
   // ── 운동 카드 ──
   const WorkoutCard = ({ item }: { item: Workout }) => (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { backgroundColor: colors.card }]}
       onPress={() => navigation.navigate('WorkoutDetail', { workoutId: item.id })}
       onLongPress={() => handleDelete(item.id, item.title)}
       activeOpacity={0.8}
     >
       <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.cardDate}>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.cardDate, { color: colors.textSub }]}>
           {format(parseISO(item.date), 'M월 d일 (EEE)', { locale: ko })}
         </Text>
       </View>
@@ -138,11 +140,11 @@ export default function HistoryScreen() {
     const dayWorkouts = workoutsByDate[key] ?? [];
     return (
       <View style={styles.selectedSection}>
-        <Text style={styles.selectedTitle}>
+        <Text style={[styles.selectedTitle, { color: colors.textSub }]}>
           {format(date, 'M월 d일 (EEE)', { locale: ko })}
         </Text>
         {dayWorkouts.length === 0 ? (
-          <Text style={styles.noWorkoutText}>이 날 운동 기록이 없어요.</Text>
+          <Text style={[styles.noWorkoutText, { color: colors.textMuted }]}>이 날 운동 기록이 없어요.</Text>
         ) : (
           dayWorkouts.map((w) => <WorkoutCard key={w.id} item={w} />)
         )}
@@ -155,9 +157,9 @@ export default function HistoryScreen() {
     if (workouts.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={60} color="#ccc" />
-          <Text style={styles.emptyText}>운동 기록이 없어요.</Text>
-          <Text style={styles.emptySubText}>운동을 완료하면 여기에 기록됩니다.</Text>
+          <Ionicons name="calendar-outline" size={60} color={colors.textMuted} />
+          <Text style={[styles.emptyText, { color: colors.textSub }]}>운동 기록이 없어요.</Text>
+          <Text style={[styles.emptySubText, { color: colors.textMuted }]}>운동을 완료하면 여기에 기록됩니다.</Text>
         </View>
       );
     }
@@ -183,7 +185,7 @@ export default function HistoryScreen() {
     return (
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {/* 주 네비게이션 */}
-        <View style={styles.navRow}>
+        <View style={[styles.navRow, { backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.navBtn}
             onPress={() => {
@@ -193,7 +195,7 @@ export default function HistoryScreen() {
           >
             <Ionicons name="chevron-back" size={22} color="#4F8EF7" />
           </TouchableOpacity>
-          <Text style={styles.navTitle}>
+          <Text style={[styles.navTitle, { color: colors.text }]}>
             {format(weekStart, 'yyyy년 M월 d일', { locale: ko })} 주
           </Text>
           <TouchableOpacity
@@ -208,7 +210,7 @@ export default function HistoryScreen() {
         </View>
 
         {/* 7일 그리드 */}
-        <View style={styles.weekGrid}>
+        <View style={[styles.weekGrid, { backgroundColor: colors.card }]}>
           {days.map((day, i) => {
             const key = getDateKey(day);
             const hasWorkout = !!workoutsByDate[key];
@@ -220,12 +222,13 @@ export default function HistoryScreen() {
                 style={[styles.weekDayCell, isSelected && styles.weekDayCellSelected]}
                 onPress={() => setSelectedDate(isSelected ? null : day)}
               >
-                <Text style={[styles.weekDayLabel, isToday && styles.weekDayLabelToday]}>
+                <Text style={[styles.weekDayLabel, { color: colors.textSub }, isToday && styles.weekDayLabelToday]}>
                   {DAY_LABELS[i]}
                 </Text>
                 <Text
                   style={[
                     styles.weekDayNum,
+                    { color: colors.text },
                     isToday && styles.weekDayNumToday,
                     isSelected && styles.weekDayNumSelected,
                   ]}
@@ -270,7 +273,7 @@ export default function HistoryScreen() {
     return (
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {/* 월 네비게이션 */}
-        <View style={styles.navRow}>
+        <View style={[styles.navRow, { backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.navBtn}
             onPress={() => {
@@ -280,7 +283,7 @@ export default function HistoryScreen() {
           >
             <Ionicons name="chevron-back" size={22} color="#4F8EF7" />
           </TouchableOpacity>
-          <Text style={styles.navTitle}>
+          <Text style={[styles.navTitle, { color: colors.text }]}>
             {format(monthDate, 'yyyy년 M월', { locale: ko })}
           </Text>
           <TouchableOpacity
@@ -297,14 +300,14 @@ export default function HistoryScreen() {
         {/* 요일 헤더 */}
         <View style={styles.calHeaderRow}>
           {DAY_LABELS.map((d) => (
-            <Text key={d} style={styles.calHeaderCell}>
+            <Text key={d} style={[styles.calHeaderCell, { color: colors.textMuted }]}>
               {d}
             </Text>
           ))}
         </View>
 
         {/* 날짜 그리드 */}
-        <View style={styles.calGrid}>
+        <View style={[styles.calGrid, { backgroundColor: colors.card }]}>
           {weeks.map((week, wi) => (
             <View key={wi} style={styles.calWeekRow}>
               {week.map((day, di) => {
@@ -322,6 +325,7 @@ export default function HistoryScreen() {
                     <Text
                       style={[
                         styles.calCellText,
+                        { color: colors.text },
                         isToday && styles.calCellToday,
                         isSelected && styles.calCellTextSelected,
                       ]}
@@ -344,7 +348,7 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SegmentControl />
       {viewMode === 'daily' && <DailyView />}
       {viewMode === 'weekly' && <WeeklyView />}

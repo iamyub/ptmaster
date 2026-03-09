@@ -44,12 +44,14 @@ import ManageRoutinesScreen from './src/screens/ManageRoutinesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import WebAlertModal, { WebAlertRef } from './src/components/WebAlertModal';
 import { registerWebAlert } from './src/utils/alert';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const tabBarHeight = 74 + insets.bottom;
   const tabBarPaddingBottom = 10 + insets.bottom;
 
@@ -57,11 +59,11 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: true,
-        headerStyle: { backgroundColor: '#fff' },
-        headerTitleStyle: { fontWeight: '700', fontSize: 18, color: '#1A1A2E' },
+        headerStyle: { backgroundColor: colors.card },
+        headerTitleStyle: { fontWeight: '700', fontSize: 18, color: colors.text },
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#F0F0F0',
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
           height: tabBarHeight,
           paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
@@ -106,8 +108,9 @@ function MainTabs() {
   );
 }
 
-export default function App() {
+function AppInner() {
   const alertRef = useRef<WebAlertRef>(null);
+  const { colors } = useTheme();
 
   useEffect(() => {
     // 웹 Alert 모달 등록
@@ -157,14 +160,15 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
+      <SafeAreaProvider style={{ backgroundColor: colors.background }}>
         <NavigationContainer>
-          <StatusBar style="dark" />
+          <StatusBar style={colors.background === '#0D0D1A' ? 'light' : 'dark'} />
           <Stack.Navigator
             screenOptions={{
-              headerStyle: { backgroundColor: '#fff' },
-              headerTitleStyle: { fontWeight: '700', color: '#1A1A2E' },
-              headerTintColor: '#4F8EF7',
+              headerStyle: { backgroundColor: colors.card },
+              headerTitleStyle: { fontWeight: '700', color: colors.text },
+              headerTintColor: colors.primary,
+              contentStyle: { backgroundColor: colors.background },
             }}
           >
             <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
@@ -193,5 +197,13 @@ export default function App() {
         {Platform.OS === 'web' && <WebAlertModal ref={alertRef} />}
       </SafeAreaProvider>
     </ErrorBoundary>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }

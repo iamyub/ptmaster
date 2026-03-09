@@ -24,6 +24,7 @@ import {
 } from '../storage/settingsStorage';
 import { fireAlarm } from '../utils/alarmHelper';
 import SetStepper from '../components/SetStepper';
+import { useTheme } from '../context/ThemeContext';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 
@@ -40,6 +41,7 @@ function formatTime(seconds: number): string {
 const TIMER_BAR_HEIGHT = 118;
 
 export default function WorkoutDetailScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<Route>();
   const { workoutId } = route.params;
@@ -288,8 +290,8 @@ export default function WorkoutDetailScreen() {
 
   if (!workout) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.notFoundText}>운동 기록을 찾을 수 없어요.</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.notFoundText, { color: colors.textSub }]}>운동 기록을 찾을 수 없어요.</Text>
       </View>
     );
   }
@@ -298,15 +300,15 @@ export default function WorkoutDetailScreen() {
   const bottomPad = timerActive ? TIMER_BAR_HEIGHT + insets.bottom + 8 : 40;
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* 진행률 바 */}
-        <View style={styles.progressCard}>
+        <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
           <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>세트 진행률</Text>
+            <Text style={[styles.progressLabel, { color: colors.textSub }]}>세트 진행률</Text>
             <Text style={styles.progressCount}>{completedSets} / {totalSets} 세트</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -315,9 +317,9 @@ export default function WorkoutDetailScreen() {
         </View>
 
         {/* 헤더 카드 */}
-        <View style={styles.headerCard}>
-          <Text style={styles.title}>{workout.title}</Text>
-          <Text style={styles.date}>
+        <View style={[styles.headerCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.title, { color: colors.text }]}>{workout.title}</Text>
+          <Text style={[styles.date, { color: colors.textSub }]}>
             {format(new Date(workout.date), 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
           </Text>
           <View style={styles.metaRow}>
@@ -335,9 +337,9 @@ export default function WorkoutDetailScreen() {
         </View>
 
         {workout.notes && (
-          <View style={styles.notesCard}>
-            <Ionicons name="document-text-outline" size={16} color="#888" />
-            <Text style={styles.notesText}>{workout.notes}</Text>
+          <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
+            <Ionicons name="document-text-outline" size={16} color={colors.textSub} />
+            <Text style={[styles.notesText, { color: colors.textSub }]}>{workout.notes}</Text>
           </View>
         )}
 
@@ -347,31 +349,31 @@ export default function WorkoutDetailScreen() {
           const effectiveRestTime = customRestTime != null ? customRestTime : defaultRestTime;
 
           return (
-            <View key={ex.id} style={styles.exerciseCard}>
+            <View key={ex.id} style={[styles.exerciseCard, { backgroundColor: colors.card }]}>
               <View style={styles.exerciseCardHeader}>
                 <View style={styles.exerciseCardHeaderLeft}>
-                  <Text style={styles.exerciseName}>{ex.exercise.name}</Text>
-                  <Text style={styles.muscleGroups}>{ex.exercise.muscleGroups.join(' · ')}</Text>
+                  <Text style={[styles.exerciseName, { color: colors.text }]}>{ex.exercise.name}</Text>
+                  <Text style={[styles.muscleGroups, { color: colors.textSub }]}>{ex.exercise.muscleGroups.join(' · ')}</Text>
                 </View>
-                <View style={styles.restTimeBadge}>
+                <View style={[styles.restTimeBadge, { backgroundColor: colors.primaryBg }]}>
                   <Ionicons name="timer-outline" size={12} color="#4F8EF7" />
                   <Text style={styles.restTimeBadgeText}>{effectiveRestTime}초</Text>
                 </View>
               </View>
 
               {/* 테이블 헤더 */}
-              <View style={styles.setTableHeader}>
-                <Text style={[styles.cellNum, styles.headerText]}>세트</Text>
-                <Text style={[styles.cellStepper, styles.headerText]}>무게 (kg)</Text>
-                <Text style={[styles.cellStepper, styles.headerText]}>횟수</Text>
+              <View style={[styles.setTableHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.cellNum, styles.headerText, { color: colors.textMuted }]}>세트</Text>
+                <Text style={[styles.cellStepper, styles.headerText, { color: colors.textMuted }]}>무게 (kg)</Text>
+                <Text style={[styles.cellStepper, styles.headerText, { color: colors.textMuted }]}>횟수</Text>
                 <View style={styles.cellDelete} />
-                <Text style={[styles.cellComplete, styles.headerText]}>완료</Text>
+                <Text style={[styles.cellComplete, styles.headerText, { color: colors.textMuted }]}>완료</Text>
               </View>
 
               {/* 세트 행 */}
               {ex.sets.map((s, idx) => (
                 <View key={s.id} style={[styles.setRow, s.completed && styles.setRowCompleted]}>
-                  <Text style={[styles.cellNum, s.completed && styles.completedText]}>
+                  <Text style={[styles.cellNum, { color: colors.text }, s.completed && styles.completedText]}>
                     {idx + 1}
                   </Text>
 
@@ -434,7 +436,7 @@ export default function WorkoutDetailScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+        <TouchableOpacity style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]} onPress={handleDelete}>
           <Ionicons name="trash-outline" size={18} color="#FF5C5C" />
           <Text style={styles.deleteButtonText}>운동 기록 삭제</Text>
         </TouchableOpacity>
@@ -442,7 +444,7 @@ export default function WorkoutDetailScreen() {
 
       {/* ── 휴식 타이머 바 ── */}
       {timerActive && (
-        <View style={[styles.timerBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View style={[styles.timerBar, { paddingBottom: Math.max(insets.bottom, 8), backgroundColor: colors.timerBg }]}>
           <View style={styles.timerTopRow}>
             <View style={styles.timerLeft}>
               <Ionicons name="timer-outline" size={15} color="rgba(255,255,255,0.7)" />

@@ -24,8 +24,9 @@ import {
 } from '../storage/settingsStorage';
 import { fireAlarm } from '../utils/alarmHelper';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
+import { useTheme, ThemeMode } from '../context/ThemeContext';
 
-// ── 상수 ─────────────────────────────────────────────────────
+// ── 상수 ────────────────────────────────────────────────────
 const REST_TIME_OPTIONS = [30, 60, 90, 120, 180];
 const EXERCISE_REST_OPTIONS: (number | null)[] = [null, 30, 60, 90, 120, 180];
 
@@ -48,6 +49,15 @@ const SOUND_TYPE_OPTIONS: { key: SoundType; label: string; desc: string }[] = [
   { key: 'chime', label: '차임 (Chime)', desc: '리드미컬한 차임' },
 ];
 
+const THEME_MODE_OPTIONS: { key: ThemeMode; label: string; icon: string; desc: string }[] = [
+  { key: 'light', label: '라이트', icon: 'sunny-outline', desc: '항상 밝게' },
+  { key: 'dark',  label: '다크',   icon: 'moon-outline',  desc: '항상 어둡게' },
+  { key: 'auto',  label: '자동',   icon: 'time-outline',  desc: '시간대별 자동' },
+];
+
+// 자동 모드 시간 옵션 (0~23시)
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
+
 function formatRestLabel(s: number | null): string {
   if (s === null) return '기본값';
   if (s < 60) return `${s}초`;
@@ -55,29 +65,35 @@ function formatRestLabel(s: number | null): string {
   return `${Math.floor(s / 60)}분 ${s % 60}초`;
 }
 
-// ── 공통 컴포넌트 ─────────────────────────────────────────────
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+function formatHour(h: number): string {
+  return `${String(h).padStart(2, '0')}:00`;
 }
 
-function RowLabel({ icon, title, desc }: { icon: string; title: string; desc?: string }) {
+// ── 공통 컴포넌트 ────────────────────────────────────────────
+function SectionHeader({ title, color }: { title: string; color: string }) {
+  return <Text style={[styles.sectionHeader, { color }]}>{title}</Text>;
+}
+
+function RowLabel({ icon, title, desc, color, subColor }: { icon: string; title: string; desc?: string; color: string; subColor: string }) {
   return (
     <View style={styles.rowLabel}>
       <Ionicons name={icon as any} size={18} color="#4F8EF7" />
       <View style={styles.rowLabelText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        {desc ? <Text style={styles.rowDesc}>{desc}</Text> : null}
+        <Text style={[styles.rowTitle, { color }]}>{title}</Text>
+        {desc ? <Text style={[styles.rowDesc, { color: subColor }]}>{desc}</Text> : null}
       </View>
     </View>
   );
 }
 
-function Divider() {
-  return <View style={styles.divider} />;
+function Divider({ color }: { color: string }) {
+  return <View style={[styles.divider, { backgroundColor: color }]} />;
 }
 
-// ── 메인 화면 ─────────────────────────────────────────────────
+// ── 메인 화면 ────────────────────────────────────────────────
 export default function SettingsScreen() {
+  const { colors, settings: themeSettings, updateSettings: updateTheme } = useTheme();
+
   const [restTime, setRestTime] = useState(90);
   const [alarmSettings, setAlarmSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
@@ -97,130 +113,198 @@ export default function SettingsScreen() {
     }, []),
   );
 
-  // ── 기본 휴식시간 ──
+  // 기본 휴식시간
   const handleRestTime = async (sec: number) => {
     setRestTime(sec);
     await saveRestTime(sec);
   };
 
-  // ── 알람 설정 ──
+  // 알람 설정
   const updateAlarm = async (patch: Partial<AlarmSettings>) => {
     const updated = { ...alarmSettings, ...patch };
     setAlarmSettings(updated);
     await saveAlarmSettings(updated);
   };
 
-  // 진동 패턴 선택 + 즉시 진동 미리보기
   const handleVibrationPattern = async (pattern: VibrationPattern) => {
     await updateAlarm({ vibrationPattern: pattern });
     fireAlarm({ ...alarmSettings, vibrationPattern: pattern, alarmType: 'vibration' });
   };
 
-  // ── 운동별 개별 휴식시간 ──
+  // 운동별 개별 휴식시간
   const handleExerciseRestTime = async (exerciseId: string, sec: number | null) => {
     const updated = { ...exerciseRestTimes };
-    if (sec === null) {
-      delete updated[exerciseId];
-    } else {
-      updated[exerciseId] = sec;
-    }
+    if (sec === null) { delete updated[exerciseId]; } else { updated[exerciseId] = sec; }
     setExerciseRestTimes(updated);
     await saveExerciseRestTime(exerciseId, sec);
     setExpandedExerciseId(null);
   };
 
-  const showVibrationSettings =
-    alarmSettings.alarmType === 'vibration' || alarmSettings.alarmType === 'both';
-  const showSoundSettings =
-    alarmSettings.alarmType === 'sound' || alarmSettings.alarmType === 'both';
+  const showVibrationSettings = alarmSettings.alarmType === 'vibration' || alarmSettings.alarmType === 'both';
+  const showSoundSettings = alarmSettings.alarmType === 'sound' || alarmSettings.alarmType === 'both';
+
+  const c = colors; // 단축 alias
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: c.background }]} contentContainerStyle={styles.content}>
 
-      {/* ════════════════ 휴식 시간 설정 ════════════════ */}
-      <SectionHeader title="휴식 시간 설정" />
-      <View style={styles.card}>
+      {/* ════ 화면 설정 ════ */}
+      <SectionHeader title="화면 설정" color={c.textSub} />
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <RowLabel icon="contrast-outline" title="화면 모드" desc="앱의 전체 색상 테마" color={c.text} subColor={c.textSub} />
 
-        {/* 기본 휴식시간 */}
-        <RowLabel
-          icon="timer-outline"
-          title="기본 휴식 시간"
-          desc="세트 완료 후 자동으로 시작되는 타이머"
-        />
+        {/* 모드 선택 */}
+        <View style={styles.chips}>
+          {THEME_MODE_OPTIONS.map((o) => {
+            const active = themeSettings.mode === o.key;
+            return (
+              <TouchableOpacity
+                key={o.key}
+                style={[
+                  styles.chip,
+                  { backgroundColor: active ? c.primaryBg : c.chipBg, borderColor: active ? c.primary : 'transparent' },
+                ]}
+                onPress={() => updateTheme({ mode: o.key })}
+              >
+                <Ionicons name={o.icon as any} size={14} color={active ? c.primary : c.textSub} />
+                <View>
+                  <Text style={[styles.chipText, { color: active ? c.primary : c.textSub }]}>{o.label}</Text>
+                  <Text style={[styles.chipSubText, { color: active ? c.primary : c.textMuted }]}>{o.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* 자동 모드: 시간대 설정 */}
+        {themeSettings.mode === 'auto' && (
+          <>
+            <Divider color={c.border} />
+            <RowLabel
+              icon="sunny-outline"
+              title="주간/야간 전환 시간"
+              desc="설정한 시간에 맞춰 자동으로 테마가 전환됩니다"
+              color={c.text}
+              subColor={c.textSub}
+            />
+
+            {/* 주간 시작 */}
+            <View style={styles.timeRow}>
+              <Ionicons name="sunny" size={16} color="#F5A623" />
+              <Text style={[styles.timeLabel, { color: c.text }]}>주간 시작</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
+                {HOUR_OPTIONS.map((h) => {
+                  const active = themeSettings.dayStartHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[
+                        styles.hourChip,
+                        { backgroundColor: active ? c.primary : c.chipBg },
+                      ]}
+                      onPress={() => updateTheme({ dayStartHour: h })}
+                    >
+                      <Text style={[styles.hourChipText, { color: active ? '#fff' : c.textSub }]}>
+                        {formatHour(h)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* 야간 시작 */}
+            <View style={styles.timeRow}>
+              <Ionicons name="moon" size={16} color="#7B6CF6" />
+              <Text style={[styles.timeLabel, { color: c.text }]}>야간 시작</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
+                {HOUR_OPTIONS.map((h) => {
+                  const active = themeSettings.nightStartHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[
+                        styles.hourChip,
+                        { backgroundColor: active ? '#7B6CF6' : c.chipBg },
+                      ]}
+                      onPress={() => updateTheme({ nightStartHour: h })}
+                    >
+                      <Text style={[styles.hourChipText, { color: active ? '#fff' : c.textSub }]}>
+                        {formatHour(h)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={[styles.autoModeInfo, { backgroundColor: c.cardAlt }]}>
+              <Ionicons name="information-circle-outline" size={14} color={c.primary} />
+              <Text style={[styles.autoModeInfoText, { color: c.textSub }]}>
+                주간: {formatHour(themeSettings.dayStartHour)} ~ {formatHour(themeSettings.nightStartHour)}  ·  야간: {formatHour(themeSettings.nightStartHour)} ~ {formatHour(themeSettings.dayStartHour)}
+              </Text>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* ════ 휴식 시간 설정 ════ */}
+      <SectionHeader title="휴식 시간 설정" color={c.textSub} />
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <RowLabel icon="timer-outline" title="기본 휴식 시간" desc="세트 완료 후 자동으로 시작되는 타이머" color={c.text} subColor={c.textSub} />
         <View style={styles.chips}>
           {REST_TIME_OPTIONS.map((sec) => (
             <TouchableOpacity
               key={sec}
-              style={[styles.chip, restTime === sec && styles.chipActive]}
+              style={[styles.chip, { backgroundColor: restTime === sec ? c.primaryBg : c.chipBg, borderColor: restTime === sec ? c.primary : 'transparent' }]}
               onPress={() => handleRestTime(sec)}
             >
-              <Text style={[styles.chipText, restTime === sec && styles.chipTextActive]}>
+              <Text style={[styles.chipText, { color: restTime === sec ? c.primary : c.textSub }]}>
                 {formatRestLabel(sec)}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.currentRow}>
-          <Ionicons name="checkmark-circle" size={14} color="#34C759" />
-          <Text style={styles.currentText}>현재: {formatRestLabel(restTime)} ({restTime}초)</Text>
+          <Ionicons name="checkmark-circle" size={14} color={c.success} />
+          <Text style={[styles.currentText, { color: c.textSub }]}>현재: {formatRestLabel(restTime)} ({restTime}초)</Text>
         </View>
 
-        <Divider />
+        <Divider color={c.border} />
 
-        {/* 운동별 개별 휴식시간 */}
-        <RowLabel
-          icon="barbell-outline"
-          title="운동별 개별 휴식 시간"
-          desc="운동마다 다른 휴식시간을 설정할 수 있어요"
-        />
+        <RowLabel icon="barbell-outline" title="운동별 개별 휴식 시간" desc="운동마다 다른 휴식시간을 설정할 수 있어요" color={c.text} subColor={c.textSub} />
         <View style={styles.exerciseRestList}>
           {DEFAULT_EXERCISES.map((ex) => {
             const customTime = exerciseRestTimes[ex.id];
             const hasCustom = customTime != null;
             const isExpanded = expandedExerciseId === ex.id;
-
             return (
               <View key={ex.id} style={styles.exRestItem}>
                 <TouchableOpacity
-                  style={styles.exRestRow}
+                  style={[styles.exRestRow, { borderBottomColor: c.border }]}
                   onPress={() => setExpandedExerciseId(isExpanded ? null : ex.id)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.exRestName}>{ex.name}</Text>
-                  <View style={[styles.exRestBadge, hasCustom && styles.exRestBadgeActive]}>
-                    <Ionicons
-                      name="timer-outline"
-                      size={11}
-                      color={hasCustom ? '#4F8EF7' : '#bbb'}
-                    />
-                    <Text style={[styles.exRestBadgeText, hasCustom && styles.exRestBadgeTextActive]}>
+                  <Text style={[styles.exRestName, { color: c.text }]}>{ex.name}</Text>
+                  <View style={[styles.exRestBadge, { backgroundColor: hasCustom ? c.primaryBg : c.chipBg }]}>
+                    <Ionicons name="timer-outline" size={11} color={hasCustom ? c.primary : c.textMuted} />
+                    <Text style={[styles.exRestBadgeText, { color: hasCustom ? c.primary : c.textMuted }]}>
                       {hasCustom ? formatRestLabel(customTime) : '기본값'}
                     </Text>
-                    <Ionicons
-                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                      size={11}
-                      color={hasCustom ? '#4F8EF7' : '#bbb'}
-                    />
+                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={11} color={hasCustom ? c.primary : c.textMuted} />
                   </View>
                 </TouchableOpacity>
-
                 {isExpanded && (
-                  <View style={styles.exRestOptions}>
+                  <View style={[styles.exRestOptions, { backgroundColor: c.cardAlt, borderBottomColor: c.border }]}>
                     {EXERCISE_REST_OPTIONS.map((sec) => {
-                      const isSelected =
-                        sec === null ? !hasCustom : exerciseRestTimes[ex.id] === sec;
+                      const isSelected = sec === null ? !hasCustom : exerciseRestTimes[ex.id] === sec;
                       return (
                         <TouchableOpacity
                           key={String(sec)}
-                          style={[styles.exRestOptBtn, isSelected && styles.exRestOptBtnActive]}
+                          style={[styles.exRestOptBtn, { backgroundColor: isSelected ? c.primaryBg : c.card, borderColor: isSelected ? c.primary : c.border }]}
                           onPress={() => handleExerciseRestTime(ex.id, sec)}
                         >
-                          <Text
-                            style={[
-                              styles.exRestOptText,
-                              isSelected && styles.exRestOptTextActive,
-                            ]}
-                          >
+                          <Text style={[styles.exRestOptText, { color: isSelected ? c.primary : c.textSub }]}>
                             {formatRestLabel(sec)}
                           </Text>
                         </TouchableOpacity>
@@ -234,43 +318,28 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ════════════════ 알림 설정 ════════════════ */}
-      <SectionHeader title="알림 설정" />
-      <View style={styles.card}>
-
-        {/* 알람 유형 */}
-        <RowLabel
-          icon="notifications-outline"
-          title="알람 유형"
-          desc="휴식 시간 종료 시 알림 방식"
-        />
+      {/* ════ 알림 설정 ════ */}
+      <SectionHeader title="알림 설정" color={c.textSub} />
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <RowLabel icon="notifications-outline" title="알람 유형" desc="휴식 시간 종료 시 알림 방식" color={c.text} subColor={c.textSub} />
         <View style={styles.chips}>
-          {ALARM_TYPE_OPTIONS.map((o) => (
-            <TouchableOpacity
-              key={o.key}
-              style={[styles.chip, alarmSettings.alarmType === o.key && styles.chipActive]}
-              onPress={() => updateAlarm({ alarmType: o.key })}
-            >
-              <Ionicons
-                name={o.icon as any}
-                size={13}
-                color={alarmSettings.alarmType === o.key ? '#4F8EF7' : '#888'}
-              />
-              <Text
-                style={[
-                  styles.chipText,
-                  alarmSettings.alarmType === o.key && styles.chipTextActive,
-                ]}
+          {ALARM_TYPE_OPTIONS.map((o) => {
+            const active = alarmSettings.alarmType === o.key;
+            return (
+              <TouchableOpacity
+                key={o.key}
+                style={[styles.chip, { backgroundColor: active ? c.primaryBg : c.chipBg, borderColor: active ? c.primary : 'transparent' }]}
+                onPress={() => updateAlarm({ alarmType: o.key })}
               >
-                {o.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Ionicons name={o.icon as any} size={13} color={active ? c.primary : c.textSub} />
+                <Text style={[styles.chipText, { color: active ? c.primary : c.textSub }]}>{o.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* 소리 안내 */}
         {showSoundSettings && (
-          <View style={styles.noticeRow}>
+          <View style={[styles.noticeRow, { backgroundColor: '#FFF8E1' }]}>
             <Ionicons name="information-circle-outline" size={14} color="#F5A623" />
             <Text style={styles.noticeText}>
               소리 기능은 expo-av 설치 후 활성화됩니다. 현재는 패턴별 진동으로 대체됩니다.
@@ -278,74 +347,51 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* 진동 패턴 */}
         {showVibrationSettings && (
           <>
-            <Divider />
-            <RowLabel
-              icon="phone-portrait-outline"
-              title="진동 패턴"
-              desc="버튼을 누르면 해당 패턴을 바로 느껴볼 수 있어요"
-            />
+            <Divider color={c.border} />
+            <RowLabel icon="phone-portrait-outline" title="진동 패턴" desc="버튼을 누르면 해당 패턴을 바로 느껴볼 수 있어요" color={c.text} subColor={c.textSub} />
             <View style={styles.chips}>
               {VIBRATION_PATTERN_OPTIONS.map((o) => {
-                const isActive = alarmSettings.vibrationPattern === o.key;
+                const active = alarmSettings.vibrationPattern === o.key;
                 return (
                   <TouchableOpacity
                     key={o.key}
-                    style={[styles.chip, styles.vibrateChip, isActive && styles.chipActive]}
+                    style={[styles.chip, styles.vibrateChip, { backgroundColor: active ? c.primaryBg : c.chipBg, borderColor: active ? c.primary : 'transparent' }]}
                     onPress={() => handleVibrationPattern(o.key)}
                   >
-                    <Ionicons
-                      name="pulse-outline"
-                      size={13}
-                      color={isActive ? '#4F8EF7' : '#888'}
-                    />
-                    <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                      {o.label}
-                    </Text>
+                    <Ionicons name="pulse-outline" size={13} color={active ? c.primary : c.textSub} />
+                    <Text style={[styles.chipText, { color: active ? c.primary : c.textSub }]}>{o.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
-            <Text style={styles.patternDesc}>
-              {
-                VIBRATION_PATTERN_OPTIONS.find(
-                  (o) => o.key === alarmSettings.vibrationPattern,
-                )?.desc
-              }
+            <Text style={[styles.patternDesc, { color: c.textSub }]}>
+              {VIBRATION_PATTERN_OPTIONS.find((o) => o.key === alarmSettings.vibrationPattern)?.desc}
               {' '}— 버튼을 눌러 진동을 미리 체험해보세요
             </Text>
           </>
         )}
 
-        {/* 소리 종류 */}
         {showSoundSettings && (
           <>
-            <Divider />
-            <RowLabel icon="musical-note-outline" title="소리 종류" desc="알람 벨 종류" />
+            <Divider color={c.border} />
+            <RowLabel icon="musical-note-outline" title="소리 종류" desc="알람 벨 종류" color={c.text} subColor={c.textSub} />
             <View style={styles.chips}>
-              {SOUND_TYPE_OPTIONS.map((o) => (
-                <TouchableOpacity
-                  key={o.key}
-                  style={[
-                    styles.chip,
-                    alarmSettings.soundType === o.key && styles.chipActive,
-                  ]}
-                  onPress={() => updateAlarm({ soundType: o.key })}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      alarmSettings.soundType === o.key && styles.chipTextActive,
-                    ]}
+              {SOUND_TYPE_OPTIONS.map((o) => {
+                const active = alarmSettings.soundType === o.key;
+                return (
+                  <TouchableOpacity
+                    key={o.key}
+                    style={[styles.chip, { backgroundColor: active ? c.primaryBg : c.chipBg, borderColor: active ? c.primary : 'transparent' }]}
+                    onPress={() => updateAlarm({ soundType: o.key })}
                   >
-                    {o.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text style={[styles.chipText, { color: active ? c.primary : c.textSub }]}>{o.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <Text style={styles.patternDesc}>
+            <Text style={[styles.patternDesc, { color: c.textSub }]}>
               {SOUND_TYPE_OPTIONS.find((o) => o.key === alarmSettings.soundType)?.desc}
             </Text>
           </>
@@ -356,13 +402,12 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6FA' },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
 
   sectionHeader: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#888',
     letterSpacing: 0.5,
     marginTop: 8,
     marginBottom: 10,
@@ -371,7 +416,6 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 18,
     marginBottom: 20,
@@ -384,36 +428,32 @@ const styles = StyleSheet.create({
 
   rowLabel: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   rowLabelText: { flex: 1 },
-  rowTitle: { fontSize: 14, fontWeight: '700', color: '#1A1A2E' },
-  rowDesc: { fontSize: 11, color: '#999', marginTop: 2 },
+  rowTitle: { fontSize: 14, fontWeight: '700' },
+  rowDesc: { fontSize: 11, marginTop: 2 },
 
-  divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 16 },
+  divider: { height: 1, marginVertical: 16 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
+    gap: 5,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#F0F2F5',
     borderWidth: 1.5,
-    borderColor: 'transparent',
   },
-  vibrateChip: { paddingHorizontal: 16 },
-  chipActive: { backgroundColor: '#EEF4FF', borderColor: '#4F8EF7' },
-  chipText: { fontSize: 13, fontWeight: '600', color: '#888' },
-  chipTextActive: { color: '#4F8EF7' },
+  vibrateChip: { paddingHorizontal: 14 },
+  chipText: { fontSize: 13, fontWeight: '600' },
+  chipSubText: { fontSize: 10, fontWeight: '400' },
 
   currentRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  currentText: { fontSize: 12, color: '#666' },
+  currentText: { fontSize: 12 },
 
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
-    backgroundColor: '#FFF8E1',
     borderRadius: 8,
     padding: 10,
     marginTop: 4,
@@ -421,9 +461,9 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, fontSize: 11, color: '#886600', lineHeight: 16 },
 
-  patternDesc: { fontSize: 11, color: '#999', marginTop: 2 },
+  patternDesc: { fontSize: 11, marginTop: 2 },
 
-  // 운동별 개별 휴식시간 목록
+  // 운동별 휴식시간
   exerciseRestList: { gap: 2 },
   exRestItem: { borderRadius: 8, overflow: 'hidden' },
   exRestRow: {
@@ -433,39 +473,39 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F6FA',
   },
-  exRestName: { fontSize: 14, color: '#333', fontWeight: '500', flex: 1 },
-  exRestBadge: {
+  exRestName: { fontSize: 14, fontWeight: '500', flex: 1 },
+  exRestBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  exRestBadgeText: { fontSize: 11, fontWeight: '600' },
+  exRestOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 10, borderBottomWidth: 1 },
+  exRestOptBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1.5 },
+  exRestOptText: { fontSize: 12, fontWeight: '600' },
+
+  // 자동 모드 시간 설정
+  timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: '#F0F2F5',
+    gap: 8,
+    marginBottom: 10,
   },
-  exRestBadgeActive: { backgroundColor: '#EEF4FF' },
-  exRestBadgeText: { fontSize: 11, color: '#bbb', fontWeight: '600' },
-  exRestBadgeTextActive: { color: '#4F8EF7' },
-  exRestOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    padding: 10,
-    backgroundColor: '#F8FAFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  exRestOptBtn: {
-    paddingHorizontal: 12,
+  timeLabel: { fontSize: 13, fontWeight: '600', width: 60 },
+  hourScroll: { flex: 1 },
+  hourChip: {
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    marginRight: 6,
+    minWidth: 52,
+    alignItems: 'center',
   },
-  exRestOptBtnActive: { backgroundColor: '#EEF4FF', borderColor: '#4F8EF7' },
-  exRestOptText: { fontSize: 12, fontWeight: '600', color: '#888' },
-  exRestOptTextActive: { color: '#4F8EF7' },
+  hourChipText: { fontSize: 12, fontWeight: '600' },
+  autoModeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  autoModeInfoText: { flex: 1, fontSize: 11, lineHeight: 16 },
 });

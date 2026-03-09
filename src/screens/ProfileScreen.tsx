@@ -6,10 +6,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { loadWorkouts } from '../storage/workoutStorage';
 import { RootStackParamList, Workout } from '../types';
+import { useTheme } from '../context/ThemeContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
 
@@ -45,42 +47,42 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       {/* 프로필 카드 */}
-      <View style={styles.profileCard}>
+      <View style={[styles.profileCard, { backgroundColor: colors.card }]}>
         <View style={styles.avatarCircle}>
           <Ionicons name="person" size={40} color="#fff" />
         </View>
-        <Text style={styles.userName}>운동인</Text>
-        <Text style={styles.userSubtitle}>피티마스터 사용자</Text>
+        <Text style={[styles.userName, { color: colors.text }]}>운동인</Text>
+        <Text style={[styles.userSubtitle, { color: colors.textSub }]}>피티마스터 사용자</Text>
       </View>
 
       {/* 운동 통계 */}
-      <Text style={styles.sectionTitle}>운동 통계</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>운동 통계</Text>
       <View style={styles.statsGrid}>
         {stats.map((s) => (
-          <View key={s.label} style={styles.statCard}>
+          <View key={s.label} style={[styles.statCard, { backgroundColor: colors.card }]}>
             <Ionicons name={s.icon as any} size={24} color="#4F8EF7" />
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{s.value}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSub }]}>{s.label}</Text>
           </View>
         ))}
       </View>
 
       {/* 설정 바로가기 */}
       <TouchableOpacity
-        style={styles.settingsLinkCard}
+        style={[styles.settingsLinkCard, { backgroundColor: colors.card }]}
         onPress={() => navigation.navigate('Settings')}
         activeOpacity={0.8}
       >
         <Ionicons name="settings-outline" size={20} color="#4F8EF7" />
-        <Text style={styles.settingsLinkText}>설정</Text>
-        <Ionicons name="chevron-forward" size={18} color="#bbb" style={styles.settingsLinkArrow} />
+        <Text style={[styles.settingsLinkText, { color: colors.text }]}>설정</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.settingsLinkArrow} />
       </TouchableOpacity>
 
-      <View style={styles.infoCard}>
+      <View style={[styles.infoCard, { backgroundColor: colors.primaryBg }]}>
         <Ionicons name="information-circle-outline" size={20} color="#4F8EF7" />
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: colors.textSub }]}>
           운동 기록을 꾸준히 남기면 성장 과정을 한눈에 확인할 수 있어요.
         </Text>
       </View>

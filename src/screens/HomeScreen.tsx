@@ -18,6 +18,7 @@ import { RootStackParamList, Routine, Workout, WorkoutExercise, WorkoutSet } fro
 import { loadWorkouts, deleteWorkout, addWorkout } from '../storage/workoutStorage';
 import { loadRoutines } from '../storage/routineStorage';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
+import { useTheme } from '../context/ThemeContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,6 +38,7 @@ function SwipeableWorkoutCard({
   onPress: () => void;
   onDelete: () => void;
 }) {
+  const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
 
@@ -97,7 +99,7 @@ function SwipeableWorkoutCard({
 
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
         <TouchableOpacity
-          style={styles.workoutCard}
+          style={[styles.workoutCard, { backgroundColor: colors.card }]}
           onPress={() => {
             if (isOpen.current) {
               close();
@@ -108,15 +110,15 @@ function SwipeableWorkoutCard({
           activeOpacity={0.8}
         >
           <View style={styles.workoutCardLeft}>
-            <Text style={styles.workoutTitle}>{workout.title}</Text>
-            <Text style={styles.workoutMeta}>
+            <Text style={[styles.workoutTitle, { color: colors.text }]}>{workout.title}</Text>
+            <Text style={[styles.workoutMeta, { color: colors.textSub }]}>
               {format(new Date(workout.date), 'M월 d일', { locale: ko })}
               {workout.duration ? `  ·  ${workout.duration}분` : ''}
             </Text>
           </View>
           <View style={styles.workoutCardRight}>
             <Text style={styles.workoutExerciseCount}>{workout.exercises.length}종목</Text>
-            <Ionicons name="chevron-forward" size={18} color="#bbb" />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -125,6 +127,7 @@ function SwipeableWorkoutCard({
 }
 
 export default function HomeScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -192,10 +195,10 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>안녕하세요!</Text>
-        <Text style={styles.date}>{today}</Text>
+        <Text style={[styles.greeting, { color: colors.text }]}>안녕하세요!</Text>
+        <Text style={[styles.date, { color: colors.textSub }]}>{today}</Text>
       </View>
 
       <TouchableOpacity
@@ -210,10 +213,10 @@ export default function HomeScreen() {
       {/* 루틴 섹션 */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>내 루틴</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>내 루틴</Text>
           <View style={styles.sectionActions}>
             <TouchableOpacity
-              style={styles.sectionPlusBtn}
+              style={[styles.sectionPlusBtn, { backgroundColor: colors.primaryBg }]}
               onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
             >
               <Ionicons name="add" size={20} color="#4F8EF7" />
@@ -226,7 +229,7 @@ export default function HomeScreen() {
 
         {routines.length === 0 ? (
           <TouchableOpacity
-            style={styles.emptyRoutineBox}
+            style={[styles.emptyRoutineBox, { backgroundColor: colors.primaryBg }]}
             onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
             activeOpacity={0.8}
           >
@@ -249,17 +252,17 @@ export default function HomeScreen() {
                 /* 카드 탭 → 루틴 편집으로 이동 */
                 <TouchableOpacity
                   key={r.id}
-                  style={styles.routineCard}
+                  style={[styles.routineCard, { backgroundColor: colors.card }]}
                   onPress={() => navigation.navigate('ManageRoutines', { routineId: r.id })}
                   activeOpacity={0.9}
                 >
-                  <View style={styles.routineIconCircle}>
+                  <View style={[styles.routineIconCircle, { backgroundColor: colors.primaryBg }]}>
                     <Ionicons name="barbell-outline" size={20} color="#4F8EF7" />
                   </View>
-                  <Text style={styles.routineCardName} numberOfLines={1}>
+                  <Text style={[styles.routineCardName, { color: colors.text }]} numberOfLines={1}>
                     {r.name}
                   </Text>
-                  <Text style={styles.routineCardExercises} numberOfLines={2}>
+                  <Text style={[styles.routineCardExercises, { color: colors.textSub }]} numberOfLines={2}>
                     {names}
                     {r.exercises.length > 3 ? ` 외 ${r.exercises.length - 3}개` : ''}
                   </Text>
@@ -282,12 +285,12 @@ export default function HomeScreen() {
 
       {/* 최근 운동 섹션 */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>최근 운동</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>최근 운동</Text>
         {recentWorkouts.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Ionicons name="barbell-outline" size={40} color="#ccc" />
-            <Text style={styles.emptyText}>아직 기록된 운동이 없어요.</Text>
-            <Text style={styles.emptySubText}>첫 번째 운동을 시작해보세요!</Text>
+          <View style={[styles.emptyBox, { backgroundColor: colors.card }]}>
+            <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textSub }]}>아직 기록된 운동이 없어요.</Text>
+            <Text style={[styles.emptySubText, { color: colors.textMuted }]}>첫 번째 운동을 시작해보세요!</Text>
           </View>
         ) : (
           recentWorkouts.map((w) => (

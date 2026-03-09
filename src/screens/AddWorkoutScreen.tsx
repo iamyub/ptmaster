@@ -17,6 +17,7 @@ import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet } from '../typ
 import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { addWorkout, loadWorkouts } from '../storage/workoutStorage';
 import SetStepper from '../components/SetStepper';
+import { useTheme } from '../context/ThemeContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'AddWorkout'>;
@@ -38,6 +39,7 @@ function findLastSets(workouts: Workout[], exerciseId: string): { weight: number
 }
 
 export default function AddWorkoutScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const routineExercises = route.params?.routineExercises;
@@ -163,24 +165,24 @@ export default function AddWorkoutScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextInput
-          style={styles.titleInput}
+          style={[styles.titleInput, { backgroundColor: colors.card, color: colors.text }]}
           value={title}
           onChangeText={setTitle}
           placeholder="운동 제목"
-          placeholderTextColor="#bbb"
+          placeholderTextColor={colors.textMuted}
         />
 
-        <View style={styles.row}>
-          <Ionicons name="time-outline" size={18} color="#888" />
+        <View style={[styles.row, { backgroundColor: colors.card }]}>
+          <Ionicons name="time-outline" size={18} color={colors.textSub} />
           <TextInput
-            style={styles.durationInput}
+            style={[styles.durationInput, { color: colors.text }]}
             value={duration}
             onChangeText={setDuration}
             placeholder="운동 시간 (분)"
-            placeholderTextColor="#bbb"
+            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
           />
         </View>
@@ -189,10 +191,10 @@ export default function AddWorkoutScreen() {
           const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
           const hasPrev = lastSets.length > 0 && !routineExercises;
           return (
-            <View key={ex.id} style={styles.exerciseBlock}>
+            <View key={ex.id} style={[styles.exerciseBlock, { backgroundColor: colors.card }]}>
               <View style={styles.exerciseHeader}>
                 <View style={styles.exerciseTitleArea}>
-                  <Text style={styles.exerciseName}>{ex.exercise.name}</Text>
+                  <Text style={[styles.exerciseName, { color: colors.text }]}>{ex.exercise.name}</Text>
                   {hasPrev && (
                     <Text style={styles.prevHint}>
                       이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
@@ -206,16 +208,16 @@ export default function AddWorkoutScreen() {
 
               {/* 세트 헤더 */}
               <View style={styles.setHeader}>
-                <Text style={styles.setHeaderNum}>세트</Text>
-                <Text style={styles.setHeaderLabel}>무게 (kg)</Text>
+                <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
                 <View style={styles.setHeaderSep} />
-                <Text style={styles.setHeaderLabel}>횟수</Text>
+                <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
                 <View style={{ width: 28 }} />
               </View>
 
               {ex.sets.map((s, setIdx) => (
                 <View key={s.id} style={styles.setRow}>
-                  <Text style={styles.setNumber}>{setIdx + 1}</Text>
+                  <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
                   <SetStepper
                     value={s.weight}
                     onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
@@ -258,11 +260,11 @@ export default function AddWorkoutScreen() {
         </TouchableOpacity>
 
         <TextInput
-          style={styles.notesInput}
+          style={[styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
           value={notes}
           onChangeText={setNotes}
           placeholder="메모 (선택)"
-          placeholderTextColor="#bbb"
+          placeholderTextColor={colors.textMuted}
           multiline
           numberOfLines={3}
         />
@@ -270,11 +272,11 @@ export default function AddWorkoutScreen() {
 
       {showExercisePicker && (
         <View style={styles.pickerOverlay}>
-          <View style={styles.pickerCard}>
+          <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
             <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>운동 선택</Text>
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>운동 선택</Text>
               <TouchableOpacity onPress={() => setShowExercisePicker(false)}>
-                <Ionicons name="close" size={22} color="#555" />
+                <Ionicons name="close" size={22} color={colors.textSub} />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.pickerList}>
@@ -283,11 +285,11 @@ export default function AddWorkoutScreen() {
                 return (
                   <TouchableOpacity
                     key={e.id}
-                    style={styles.pickerItem}
+                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
                     onPress={() => addExercise(e.id)}
                   >
-                    <Text style={styles.pickerItemName}>{e.name}</Text>
-                    <Text style={styles.pickerItemMuscles}>
+                    <Text style={[styles.pickerItemName, { color: colors.text }]}>{e.name}</Text>
+                    <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
                       {e.muscleGroups.join(', ')}
                       {last.length > 0
                         ? `  ·  최근 ${last[0].weight}kg × ${last[0].reps}회`

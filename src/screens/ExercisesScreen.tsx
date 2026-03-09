@@ -16,6 +16,7 @@ import {
   saveExerciseRestTime,
   ExerciseRestTimes,
 } from '../storage/settingsStorage';
+import { useTheme } from '../context/ThemeContext';
 
 const CATEGORIES: { key: ExerciseCategory | 'all'; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -39,6 +40,7 @@ function formatRestLabel(sec: number | null): string {
 }
 
 export default function ExercisesScreen() {
+  const { colors } = useTheme();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory | 'all'>('all');
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
@@ -70,15 +72,15 @@ export default function ExercisesScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* 검색 + 카테고리 */}
       <View>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={18} color="#999" style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
+          <Ionicons name="search-outline" size={18} color={colors.textSub} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="운동 검색..."
-            placeholderTextColor="#bbb"
+            placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
           />
@@ -94,6 +96,7 @@ export default function ExercisesScreen() {
             <TouchableOpacity
               style={[
                 styles.categoryChip,
+                { backgroundColor: colors.chipBg, borderColor: colors.border },
                 selectedCategory === item.key && styles.categoryChipActive,
               ]}
               onPress={() => setSelectedCategory(item.key)}
@@ -101,6 +104,7 @@ export default function ExercisesScreen() {
               <Text
                 style={[
                   styles.categoryChipText,
+                  { color: colors.textSub },
                   selectedCategory === item.key && styles.categoryChipTextActive,
                 ]}
               >
@@ -124,16 +128,16 @@ export default function ExercisesScreen() {
           const isExpanded = expandedId === item.id;
 
           return (
-            <View style={styles.exerciseCard}>
+            <View style={[styles.exerciseCard, { backgroundColor: colors.card }]}>
               {/* 기본 행 */}
               <View style={styles.exerciseRow}>
                 <View style={styles.exerciseLeft}>
-                  <Text style={styles.exerciseName}>{item.name}</Text>
-                  <Text style={styles.exerciseMuscles}>{item.muscleGroups.join(' · ')}</Text>
+                  <Text style={[styles.exerciseName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.exerciseMuscles, { color: colors.textSub }]}>{item.muscleGroups.join(' · ')}</Text>
                 </View>
 
                 <View style={styles.exerciseRight}>
-                  <View style={styles.categoryBadge}>
+                  <View style={[styles.categoryBadge, { backgroundColor: colors.primaryBg }]}>
                     <Text style={styles.categoryBadgeText}>
                       {CATEGORY_LABELS[item.category] ?? item.category}
                     </Text>
@@ -143,7 +147,8 @@ export default function ExercisesScreen() {
                   <TouchableOpacity
                     style={[
                       styles.restTimeIconBtn,
-                      hasCustomTime && styles.restTimeIconBtnActive,
+                      { backgroundColor: colors.chipBg },
+                      hasCustomTime && [styles.restTimeIconBtnActive, { backgroundColor: colors.primaryBg }],
                     ]}
                     onPress={() => setExpandedId(isExpanded ? null : item.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -162,11 +167,11 @@ export default function ExercisesScreen() {
 
               {/* 개별 휴식시간 선택 패널 (확장) */}
               {isExpanded && (
-                <View style={styles.restTimePanel}>
+                <View style={[styles.restTimePanel, { backgroundColor: colors.cardAlt, borderTopColor: colors.border }]}>
                   <View style={styles.restTimePanelHeader}>
                     <Ionicons name="timer-outline" size={14} color="#4F8EF7" />
                     <Text style={styles.restTimePanelTitle}>개별 휴식 시간</Text>
-                    <Text style={styles.restTimePanelHint}>
+                    <Text style={[styles.restTimePanelHint, { color: colors.textMuted }]}>
                       기본값은 프로필 설정을 따릅니다
                     </Text>
                   </View>
@@ -179,12 +184,13 @@ export default function ExercisesScreen() {
                       return (
                         <TouchableOpacity
                           key={String(sec)}
-                          style={[styles.restTimePanelBtn, isSelected && styles.restTimePanelBtnActive]}
+                          style={[styles.restTimePanelBtn, { backgroundColor: colors.card, borderColor: colors.border }, isSelected && [styles.restTimePanelBtnActive, { backgroundColor: colors.primaryBg, borderColor: '#4F8EF7' }]]}
                           onPress={() => handleSelectRestTime(item.id, sec)}
                         >
                           <Text
                             style={[
                               styles.restTimePanelBtnText,
+                              { color: colors.textSub },
                               isSelected && styles.restTimePanelBtnTextActive,
                             ]}
                           >
@@ -201,8 +207,8 @@ export default function ExercisesScreen() {
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="search-outline" size={40} color="#ccc" />
-            <Text style={styles.emptyText}>검색 결과가 없어요.</Text>
+            <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textSub }]}>검색 결과가 없어요.</Text>
           </View>
         }
       />
