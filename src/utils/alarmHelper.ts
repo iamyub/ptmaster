@@ -11,13 +11,13 @@ import { Vibration, Platform } from 'react-native';
 import { AlarmSettings, VibrationPattern, SoundType } from '../storage/settingsStorage';
 
 // ── 진동 패턴 정의 ──────────────────────────────────────────
-// short:  짧게 한 번 (100ms)
-// medium: 두 번 연속 펄스 (200ms × 2)
-// long:   세 번 연속 펄스 (300ms × 3)
+// short:  짧게 단발 (80ms)
+// medium: 150ms 3회 반복
+// long:   400ms 3회, 간격 200ms
 const VIBRATION_PATTERNS: Record<VibrationPattern, number[]> = {
-  short:  [0, 100],
-  medium: [0, 200, 100, 200],
-  long:   [0, 300, 100, 300, 100, 300],
+  short:  [0, 80],
+  medium: [0, 150, 100, 150, 100, 150],
+  long:   [0, 400, 200, 400, 200, 400],
 };
 
 // 소리 타입별 대체 진동 패턴

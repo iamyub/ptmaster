@@ -170,8 +170,8 @@ function MainTabs({
           tabBarStyle: {
             backgroundColor: colors.card,
             borderTopColor: colors.border,
-            height: tabBarHeight + insets.bottom + (activeWorkout ? MINI_BAR_HEIGHT : 0),
-            paddingBottom: paddingBottom + (activeWorkout ? MINI_BAR_HEIGHT : 0),
+            height: tabBarHeight + insets.bottom,
+            paddingBottom: paddingBottom,
             paddingTop: isLarge ? 10 : 8,
           },
           tabBarActiveTintColor: '#4F8EF7',
