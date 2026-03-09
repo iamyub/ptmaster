@@ -211,8 +211,7 @@ function ExerciseRestSlider({
       <DrumRollPicker
         value={pickerValue}
         onChange={(v) => onSelect(v)}
-        primaryColor={isDefault ? '#ccc' : primaryColor}
-        disabled={isDefault}
+        primaryColor={isDefault ? '#aaa' : primaryColor}
       />
     </View>
   );
@@ -724,6 +723,8 @@ const styles = StyleSheet.create({
     height: 34 * 3,
     overflow: 'hidden',
     marginVertical: 8,
+    alignSelf: 'center',
+    width: '72%',
   },
   pickerHighlight: {
     position: 'absolute',

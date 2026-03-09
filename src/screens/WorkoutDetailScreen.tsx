@@ -15,15 +15,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet } from '../types';
+import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet, Exercise } from '../types';
 import { EXERCISES } from '../utils/exercises';
 import { loadWorkouts, deleteWorkout, updateWorkout } from '../storage/workoutStorage';
 import {
   loadRestTime,
   loadAlarmSettings,
   loadExerciseRestTimes,
+  loadCustomAlternatives,
   AlarmSettings,
   ExerciseRestTimes,
+  CustomAlternatives,
   DEFAULT_ALARM_SETTINGS,
 } from '../storage/settingsStorage';
 import SetStepper from '../components/SetStepper';
@@ -66,6 +68,7 @@ export default function WorkoutDetailScreen() {
   const [defaultRestTime, setDefaultRestTime] = useState(90);
   const [alarmSettings, setAlarmSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
+  const [customAlternatives, setCustomAlternatives] = useState<CustomAlternatives>({});
 
   // Workout context (timer lives here globally)
   const {
@@ -83,11 +86,12 @@ export default function WorkoutDetailScreen() {
 
   // Load settings
   useEffect(() => {
-    Promise.all([loadRestTime(), loadAlarmSettings(), loadExerciseRestTimes()]).then(
-      ([restTime, alarm, exTimes]) => {
+    Promise.all([loadRestTime(), loadAlarmSettings(), loadExerciseRestTimes(), loadCustomAlternatives()]).then(
+      ([restTime, alarm, exTimes, customAlts]) => {
         setDefaultRestTime(restTime);
         setAlarmSettings(alarm);
         setExerciseRestTimes(exTimes);
+        setCustomAlternatives(customAlts);
       },
     );
   }, []);
@@ -619,6 +623,7 @@ export default function WorkoutDetailScreen() {
           <ExerciseChangeModal
             targetWexId={changeTargetExId}
             editedExercises={editedExercises}
+            customAlternatives={customAlternatives}
             onClose={() => setChangeTargetExId(null)}
             onConfirm={handleChangeExercise}
             colors={colors}
@@ -690,6 +695,7 @@ export default function WorkoutDetailScreen() {
         <ExerciseChangeModal
           targetWexId={changeTargetExId}
           editedExercises={editedExercises}
+          customAlternatives={customAlternatives}
           onClose={() => setChangeTargetExId(null)}
           onConfirm={handleChangeExercise}
           colors={colors}
@@ -699,16 +705,27 @@ export default function WorkoutDetailScreen() {
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────
+function displayName(ex: Exercise): string {
+  return ex.description ? `${ex.name} - ${ex.description}` : ex.name;
+}
+
 // ── Exercise change modal ──────────────────────────────────────
+type ListItem =
+  | { _type: 'header'; id: string; title: string }
+  | (Exercise & { _type: 'exercise' });
+
 function ExerciseChangeModal({
   targetWexId,
   editedExercises,
+  customAlternatives,
   onClose,
   onConfirm,
   colors,
 }: {
   targetWexId: string;
   editedExercises: WorkoutExercise[];
+  customAlternatives: CustomAlternatives;
   onClose: () => void;
   onConfirm: (targetWexId: string, newExId: string) => void;
   colors: any;
@@ -717,19 +734,42 @@ function ExerciseChangeModal({
   if (!target) return null;
 
   const currentCategory = target.exercise.category;
-  const alternatives = EXERCISES.filter(
-    (e) => e.category === currentCategory && e.id !== target.exercise.id,
+
+  // 대체운동: 커스텀 우선, 없으면 EXERCISES 기본값
+  const altIds =
+    customAlternatives[target.exercise.id] !== undefined
+      ? customAlternatives[target.exercise.id]
+      : (target.exercise.alternativeExercises ?? []);
+
+  const altSet = new Set(altIds);
+  const altExercises = altIds
+    .map((id) => EXERCISES.find((e) => e.id === id))
+    .filter((e): e is Exercise => !!e && e.id !== target.exercise.id);
+
+  // 같은 카테고리 (대체운동 및 현재 운동 제외)
+  const categoryOthers = EXERCISES.filter(
+    (e) => e.category === currentCategory && e.id !== target.exercise.id && !altSet.has(e.id),
   );
+
+  const listData: ListItem[] = [];
+  if (altExercises.length > 0) {
+    listData.push({ _type: 'header', id: '__header_alt', title: '⭐ 대체 운동' });
+    altExercises.forEach((e) => listData.push({ ...e, _type: 'exercise' }));
+  }
+  if (categoryOthers.length > 0) {
+    listData.push({ _type: 'header', id: '__header_cat', title: `같은 카테고리 (${currentCategory})` });
+    categoryOthers.forEach((e) => listData.push({ ...e, _type: 'exercise' }));
+  }
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={exChangeStyles.overlay}>
         <View style={[exChangeStyles.sheet, { backgroundColor: colors.card }]}>
           <View style={exChangeStyles.header}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[exChangeStyles.title, { color: colors.text }]}>운동 변경</Text>
               <Text style={[exChangeStyles.subtitle, { color: colors.textSub }]}>
-                {currentCategory} · 현재: {target.exercise.name}
+                현재: {displayName(target.exercise)}
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -737,30 +777,42 @@ function ExerciseChangeModal({
             </TouchableOpacity>
           </View>
           <FlatList
-            data={alternatives}
-            keyExtractor={(e) => e.id}
+            data={listData}
+            keyExtractor={(item) => item.id}
             style={exChangeStyles.list}
-            ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
             ListEmptyComponent={
               <Text style={[exChangeStyles.empty, { color: colors.textMuted }]}>
-                같은 카테고리의 다른 운동이 없습니다.
+                변경 가능한 운동이 없습니다.
               </Text>
             }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={exChangeStyles.item}
-                onPress={() => onConfirm(targetWexId, item.id)}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[exChangeStyles.itemName, { color: colors.text }]}>{item.name}</Text>
-                  <Text style={[exChangeStyles.itemSub, { color: colors.textSub }]}>
-                    {[item.equipment, item.description].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              if (item._type === 'header') {
+                return (
+                  <View style={[exChangeStyles.sectionHeader, { backgroundColor: colors.cardAlt }]}>
+                    <Text style={[exChangeStyles.sectionHeaderText, { color: colors.textSub }]}>
+                      {item.title}
+                    </Text>
+                  </View>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  style={[exChangeStyles.item, { borderBottomColor: colors.border }]}
+                  onPress={() => onConfirm(targetWexId, item.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[exChangeStyles.itemName, { color: colors.text }]}>
+                      {displayName(item)}
+                    </Text>
+                    <Text style={[exChangeStyles.itemSub, { color: colors.textSub }]}>
+                      {item.equipment}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
       </View>
@@ -782,7 +834,6 @@ const exChangeStyles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingBottom: 16,
@@ -790,11 +841,17 @@ const exChangeStyles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
   subtitle: { fontSize: 12 },
   list: { flex: 1 },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  sectionHeaderText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
+    borderBottomWidth: 1,
   },
   itemName: { fontSize: 15, fontWeight: '600', marginBottom: 3 },
   itemSub: { fontSize: 12 },

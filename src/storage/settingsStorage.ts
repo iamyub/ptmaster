@@ -77,3 +77,21 @@ export async function saveExerciseRestTime(
   }
   await storageSet(EXERCISE_REST_TIMES_KEY, JSON.stringify(times));
 }
+
+// ── 대체운동 커스터마이징 ──────────────────────────────────────
+// 사용자가 직접 수정한 대체운동 목록 (exerciseId → altId[])
+const ALTERNATIVE_EXERCISES_KEY = '@ptmaster_alternative_exercises';
+export type CustomAlternatives = Record<string, string[]>;
+
+export async function loadCustomAlternatives(): Promise<CustomAlternatives> {
+  try {
+    const json = await storageGet(ALTERNATIVE_EXERCISES_KEY);
+    return json ? JSON.parse(json) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function saveCustomAlternatives(data: CustomAlternatives): Promise<void> {
+  await storageSet(ALTERNATIVE_EXERCISES_KEY, JSON.stringify(data));
+}

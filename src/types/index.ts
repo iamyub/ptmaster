@@ -4,6 +4,7 @@ export interface Exercise {
   category: ExerciseCategory;
   equipment: string;
   description?: string;
+  alternativeExercises: string[];
 }
 
 export type ExerciseCategory =

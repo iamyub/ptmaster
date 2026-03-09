@@ -312,7 +312,7 @@ function AppInner() {
             <Stack.Screen
               name="Settings"
               component={SettingsScreen}
-              options={{ title: '설정' }}
+              options={{ title: '설정', headerBackTitle: '메인 화면' }}
             />
           </Stack.Navigator>
         </NavigationContainer>
