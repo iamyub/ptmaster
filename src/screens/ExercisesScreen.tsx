@@ -22,13 +22,12 @@ import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
 
 const CATEGORIES: { key: ExerciseCategory | 'all'; label: string }[] = [
   { key: 'all', label: '전체' },
-  { key: 'chest', label: '가슴' },
-  { key: 'back', label: '등' },
-  { key: 'shoulders', label: '어깨' },
-  { key: 'arms', label: '팔' },
-  { key: 'legs', label: '하체' },
-  { key: 'core', label: '코어' },
-  { key: 'cardio', label: '유산소' },
+  { key: '가슴', label: '가슴' },
+  { key: '등', label: '등' },
+  { key: '어깨', label: '어깨' },
+  { key: '팔', label: '팔' },
+  { key: '하체', label: '하체' },
+  { key: '복근', label: '복근' },
 ];
 
 const REST_TIME_OPTIONS: (number | null)[] = [null, 30, 60, 90, 120, 180];
@@ -77,7 +76,7 @@ export default function ExercisesScreen() {
   const filtered = DEFAULT_EXERCISES.filter((e) => {
     const matchCategory = selectedCategory === 'all' || e.category === selectedCategory;
     const matchSearch =
-      e.name.includes(search) || e.muscleGroups.some((m) => m.includes(search));
+      e.name.includes(search) || e.equipment.includes(search) || (e.description ?? '').includes(search);
     return matchCategory && matchSearch;
   });
 
@@ -161,7 +160,7 @@ export default function ExercisesScreen() {
                     {item.name}
                   </Text>
                   <Text style={[styles.exerciseMuscles, { color: colors.textSub }]}>
-                    {item.muscleGroups.join(' · ')}
+                    {[item.equipment, item.description].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
 

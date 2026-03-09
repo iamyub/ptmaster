@@ -318,7 +318,7 @@ export default function WorkoutDetailScreen() {
               {ex.exercise.name}
             </Text>
             <Text style={[styles.muscleGroups, { color: colors.textSub }]}>
-              {ex.exercise.muscleGroups.join(' · ')}
+              {[ex.exercise.equipment, ex.exercise.description].filter(Boolean).join(' · ')}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

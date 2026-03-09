@@ -290,7 +290,7 @@ export default function AddWorkoutScreen() {
                   >
                     <Text style={[styles.pickerItemName, { color: colors.text }]}>{e.name}</Text>
                     <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
-                      {e.muscleGroups.join(', ')}
+                      {[e.equipment, e.description].filter(Boolean).join(' · ')}
                       {last.length > 0
                         ? `  ·  최근 ${last[0].weight}kg × ${last[0].reps}회`
                         : ''}

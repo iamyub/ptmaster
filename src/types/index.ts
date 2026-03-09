@@ -2,18 +2,17 @@ export interface Exercise {
   id: string;
   name: string;
   category: ExerciseCategory;
-  muscleGroups: string[];
+  equipment: string;
+  description?: string;
 }
 
 export type ExerciseCategory =
-  | 'chest'
-  | 'back'
-  | 'shoulders'
-  | 'arms'
-  | 'legs'
-  | 'core'
-  | 'cardio'
-  | 'full_body';
+  | '가슴'
+  | '등'
+  | '어깨'
+  | '팔'
+  | '하체'
+  | '복근';
 
 export interface WorkoutSet {
   id: string;

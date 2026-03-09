@@ -194,7 +194,7 @@ function ExercisePickerModal({
                         {item.name}
                       </Text>
                       <Text style={[mStyles.pickerRowMuscle, { color: colors.textSub }]}>
-                        {item.muscleGroups.join(' · ')}
+                        {[item.equipment, item.description].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
                     {isAlready ? (
@@ -217,7 +217,7 @@ function ExercisePickerModal({
             <View style={[mStyles.configExerciseHeader, { backgroundColor: colors.card }]}>
               <Text style={[mStyles.configExerciseName, { color: colors.text }]}>{pickedExercise?.name}</Text>
               <Text style={[mStyles.configExerciseMuscle, { color: colors.textSub }]}>
-                {pickedExercise?.muscleGroups.join(' · ')}
+                {[pickedExercise?.equipment, pickedExercise?.description].filter(Boolean).join(' · ')}
               </Text>
             </View>
 
@@ -355,7 +355,7 @@ function InlineExercisePicker({
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{item.name}</Text>
                 <Text style={{ fontSize: 11, color: colors.textSub, marginTop: 2 }}>
-                  {item.muscleGroups.join(' · ')}
+                  {[item.equipment, item.description].filter(Boolean).join(' · ')}
                 </Text>
               </View>
               {isAlready ? (
@@ -645,7 +645,7 @@ export default function ManageRoutinesScreen() {
                     {exercise.name}
                   </Text>
                   <Text style={[styles.formExerciseMuscle, { color: colors.textSub }]}>
-                    {exercise.muscleGroups.join(' · ')}
+                    {[exercise.equipment, exercise.description].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
                 <TouchableOpacity
