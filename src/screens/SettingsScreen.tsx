@@ -1,12 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  PanResponder,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -40,9 +38,9 @@ const ALARM_TYPE_OPTIONS: { key: AlarmType; label: string; icon: string }[] = [
 ];
 
 const VIBRATION_PATTERN_OPTIONS: { key: VibrationPattern; label: string; desc: string }[] = [
-  { key: 'short', label: '짧게', desc: '80ms 단발 진동' },
-  { key: 'medium', label: '보통', desc: '150ms × 3회 반복' },
-  { key: 'long', label: '길게', desc: '400ms × 3회 (간격 200ms)' },
+  { key: 'short', label: '짧게', desc: '200ms 단발 진동' },
+  { key: 'medium', label: '보통', desc: '400ms × 3회 (간격 300ms)' },
+  { key: 'long', label: '길게', desc: '800ms × 3회 (간격 400ms)' },
 ];
 
 const SOUND_TYPE_OPTIONS: { key: SoundType; label: string; desc: string }[] = [
@@ -95,134 +93,87 @@ function Divider({ color }: { color: string }) {
   return <View style={[styles.divider, { backgroundColor: color }]} />;
 }
 
-// ── 슬라이더 컴포넌트 ─────────────────────────────────────────
-function RestTimeSlider({
+// ── 드럼롤 피커 ──────────────────────────────────────────────
+const PICKER_ITEM_H = 56;
+
+function DrumRollPicker({
   value,
   onChange,
   snapValues = REST_SNAP_VALUES,
   primaryColor = '#4F8EF7',
-  trackColor = '#EEF0F5',
-  labelColor = '#888',
+  disabled = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   snapValues?: number[];
   primaryColor?: string;
-  trackColor?: string;
-  labelColor?: string;
+  disabled?: boolean;
 }) {
-  const [trackWidth, setTrackWidth] = useState(0);
-  const trackWidthRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const initialValueRef = useRef(value);
 
-  const valueToRatio = (v: number) => {
-    const idx = snapValues.indexOf(v);
-    return idx < 0 ? 0 : idx / (snapValues.length - 1);
+  useEffect(() => {
+    const idx = snapValues.indexOf(initialValueRef.current);
+    if (idx >= 0) {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: idx * PICKER_ITEM_H, animated: false });
+      }, 80);
+    }
+  }, []);
+
+  const handleScrollEnd = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    if (disabled) return;
+    const y = e.nativeEvent.contentOffset.y;
+    const idx = Math.round(y / PICKER_ITEM_H);
+    const clamped = Math.max(0, Math.min(snapValues.length - 1, idx));
+    onChange(snapValues[clamped]);
   };
-
-  const ratioToValue = (ratio: number) => {
-    const clamped = Math.max(0, Math.min(1, ratio));
-    const idx = Math.round(clamped * (snapValues.length - 1));
-    return snapValues[idx];
-  };
-
-  const handleTouch = (locationX: number) => {
-    const w = trackWidthRef.current;
-    if (w === 0) return;
-    onChange(ratioToValue(locationX / w));
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => handleTouch(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => handleTouch(e.nativeEvent.locationX),
-      onPanResponderRelease: (e) => handleTouch(e.nativeEvent.locationX),
-    }),
-  ).current;
-
-  const thumbRatio = valueToRatio(value);
-  const THUMB_SIZE = 28;
 
   return (
-    <View style={styles.sliderContainer}>
-      {/* Current value display */}
-      <View style={styles.sliderValueRow}>
-        <Text style={[styles.sliderCurrentValue, { color: primaryColor }]}>
-          {formatRestLabel(value)}
-        </Text>
-      </View>
-
-      {/* Slider track area (full-width touch target) */}
+    <View style={styles.pickerContainer}>
+      {/* 선택 영역 하이라이트 */}
       <View
-        style={styles.sliderTrackWrapper}
-        onLayout={(e) => {
-          const w = e.nativeEvent.layout.width;
-          setTrackWidth(w);
-          trackWidthRef.current = w;
-        }}
-        {...panResponder.panHandlers}
+        style={[styles.pickerHighlight, { borderColor: disabled ? '#ccc' : primaryColor }]}
+        pointerEvents="none"
+      />
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={PICKER_ITEM_H}
+        decelerationRate="fast"
+        nestedScrollEnabled
+        scrollEnabled={!disabled}
+        onMomentumScrollEnd={handleScrollEnd}
+        onScrollEndDrag={handleScrollEnd}
+        contentContainerStyle={{ paddingVertical: PICKER_ITEM_H }}
+        style={{ height: PICKER_ITEM_H * 3 }}
       >
-        {/* Background track */}
-        <View style={[styles.sliderTrack, { backgroundColor: trackColor }]}>
-          {/* Filled portion */}
-          <View
-            style={[
-              styles.sliderFill,
-              { backgroundColor: primaryColor, width: `${thumbRatio * 100}%` as any },
-            ]}
-          />
-        </View>
-        {/* Tick marks */}
-        {trackWidth > 0 && snapValues.map((v, i) => {
-          const tickLeft = (i / (snapValues.length - 1)) * trackWidth;
-          const isActive = v <= value;
+        {snapValues.map((v) => {
+          const isSelected = v === value;
           return (
-            <View
-              key={v}
-              style={[
-                styles.sliderTick,
-                { left: tickLeft - 2, backgroundColor: isActive ? '#fff' : trackColor },
-              ]}
-            />
+            <View key={v} style={styles.pickerItem}>
+              <Text
+                style={[
+                  styles.pickerItemText,
+                  { color: disabled ? '#bbb' : isSelected ? primaryColor : '#bbb' },
+                  isSelected && styles.pickerItemTextSelected,
+                ]}
+              >
+                {v < 60 ? `${v}초` : `${v / 60}분`}
+              </Text>
+            </View>
           );
         })}
-        {/* Thumb */}
-        {trackWidth > 0 && (
-          <View
-            style={[
-              styles.sliderThumb,
-              {
-                left: thumbRatio * trackWidth - THUMB_SIZE / 2,
-                width: THUMB_SIZE,
-                height: THUMB_SIZE,
-                borderRadius: THUMB_SIZE / 2,
-                backgroundColor: primaryColor,
-              },
-            ]}
-          />
-        )}
-      </View>
-
-      {/* Min/Max labels */}
-      <View style={styles.sliderMinMaxRow}>
-        <Text style={[styles.sliderMinMaxText, { color: labelColor }]}>
-          {snapValues[0]}초
-        </Text>
-        <Text style={[styles.sliderMinMaxText, { color: labelColor }]}>
-          {snapValues[snapValues.length - 1]}초
-        </Text>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
-// ── 운동별 휴식시간 슬라이더 ────────────────────────────────────
+// ── 운동별 휴식시간 피커 ───────────────────────────────────────
 function ExerciseRestSlider({
   customTime,
   onSelect,
   primaryColor,
-  trackColor,
   labelColor,
   chipBg,
   textSub,
@@ -231,14 +182,13 @@ function ExerciseRestSlider({
   customTime: number | null;
   onSelect: (v: number | null) => void;
   primaryColor: string;
-  trackColor: string;
   labelColor: string;
   chipBg: string;
   textSub: string;
   cardColor: string;
 }) {
   const isDefault = customTime === null;
-  const sliderValue = customTime ?? 90;
+  const pickerValue = customTime ?? 90;
 
   return (
     <View style={[styles.exSliderPanel, { backgroundColor: cardColor }]}>
@@ -258,20 +208,12 @@ function ExerciseRestSlider({
         </Text>
       </TouchableOpacity>
 
-      {/* 슬라이더 (기본값이 아닐 때 활성화) */}
-      <View style={[styles.exSliderArea, { opacity: isDefault ? 0.4 : 1 }]}>
-        <RestTimeSlider
-          value={sliderValue}
-          onChange={(v) => {
-            if (!isDefault) onSelect(v);
-            else onSelect(v); // activates custom time too
-          }}
-          snapValues={EXERCISE_SNAP_VALUES}
-          primaryColor={primaryColor}
-          trackColor={trackColor}
-          labelColor={labelColor}
-        />
-      </View>
+      <DrumRollPicker
+        value={pickerValue}
+        onChange={(v) => onSelect(v)}
+        primaryColor={isDefault ? '#ccc' : primaryColor}
+        disabled={isDefault}
+      />
     </View>
   );
 }
@@ -451,13 +393,11 @@ export default function SettingsScreen() {
           subColor={c.textSub}
         />
 
-        {/* 슬라이더 */}
-        <RestTimeSlider
+        {/* 드럼롤 피커 */}
+        <DrumRollPicker
           value={restTime}
           onChange={handleRestTime}
           primaryColor={c.primary}
-          trackColor={c.border}
-          labelColor={c.textMuted}
         />
 
         <Divider color={c.border} />
@@ -528,7 +468,6 @@ export default function SettingsScreen() {
                       customTime={customTime ?? null}
                       onSelect={(v) => handleExerciseRestTime(ex.id, v)}
                       primaryColor={c.primary}
-                      trackColor={c.border}
                       labelColor={c.textMuted}
                       chipBg={c.chipBg}
                       textSub={c.textSub}
@@ -780,51 +719,35 @@ const styles = StyleSheet.create({
   exDefaultToggleText: { fontSize: 13, fontWeight: '600' },
   exSliderArea: {},
 
-  // 슬라이더
-  sliderContainer: { marginVertical: 4 },
-  sliderValueRow: { alignItems: 'center', marginBottom: 10 },
-  sliderCurrentValue: { fontSize: 32, fontWeight: '800', letterSpacing: 1 },
-  sliderTrackWrapper: {
-    height: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
+  // 드럼롤 피커
+  pickerContainer: {
+    height: 56 * 3,
+    overflow: 'hidden',
+    marginVertical: 8,
   },
-  sliderTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'visible',
-  },
-  sliderFill: {
+  pickerHighlight: {
     position: 'absolute',
+    top: 56,
     left: 0,
-    top: 0,
-    height: 6,
-    borderRadius: 3,
+    right: 0,
+    height: 56,
+    borderTopWidth: 1.5,
+    borderBottomWidth: 1.5,
+    zIndex: 1,
   },
-  sliderTick: {
-    position: 'absolute',
-    top: -5,
-    width: 4,
-    height: 16,
-    borderRadius: 2,
-    marginTop: 0,
+  pickerItem: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sliderThumb: {
-    position: 'absolute',
-    top: -11,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+  pickerItemText: {
+    fontSize: 20,
+    fontWeight: '400',
   },
-  sliderMinMaxRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    marginTop: 6,
+  pickerItemTextSelected: {
+    fontSize: 34,
+    fontWeight: '800',
   },
-  sliderMinMaxText: { fontSize: 11, fontWeight: '500' },
 
   // 자동 모드
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },

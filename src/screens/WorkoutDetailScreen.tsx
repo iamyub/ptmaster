@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   useWindowDimensions,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -14,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet } from '../types';
+import { EXERCISES } from '../utils/exercises';
 import { loadWorkouts, deleteWorkout, updateWorkout } from '../storage/workoutStorage';
 import {
   loadRestTime,
@@ -57,6 +60,7 @@ export default function WorkoutDetailScreen() {
   const [editedExercises, setEditedExercises] = useState<WorkoutExercise[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedExId, setSelectedExId] = useState<string | null>(null);
+  const [changeTargetExId, setChangeTargetExId] = useState<string | null>(null);
 
   // Settings
   const [defaultRestTime, setDefaultRestTime] = useState(90);
@@ -270,6 +274,38 @@ export default function WorkoutDetailScreen() {
     }
   };
 
+  const handleChangeExercise = (targetWexId: string, newExerciseId: string) => {
+    const newEx = EXERCISES.find((e) => e.id === newExerciseId);
+    if (!newEx) return;
+    showAlert(
+      '운동 변경',
+      '운동을 변경하면 기존 세트 기록이 초기화됩니다. 계속하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '변경',
+          style: 'destructive',
+          onPress: () => {
+            setChangeTargetExId(null);
+            setEditedExercises((prev) => {
+              const next = prev.map((ex) => {
+                if (ex.id !== targetWexId) return ex;
+                return {
+                  ...ex,
+                  exercise: newEx,
+                  sets: ex.sets.map((s) => ({ ...s, completed: false, weight: 0, reps: 0 })),
+                };
+              });
+              autoSave(next);
+              return next;
+            });
+            setHasChanges(true);
+          },
+        },
+      ],
+    );
+  };
+
   const handleDelete = () => {
     if (!workout) return;
     showAlert('운동 삭제', `"${workout.title}"를 삭제할까요?`, [
@@ -329,6 +365,14 @@ export default function WorkoutDetailScreen() {
               <Ionicons name="timer-outline" size={12} color="#4F8EF7" />
               <Text style={styles.restTimeBadgeText}>{effectiveRestTime}초</Text>
             </View>
+            <TouchableOpacity
+              style={[styles.changeExBtn, { backgroundColor: colors.chipBg }]}
+              onPress={() => setChangeTargetExId(ex.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Ionicons name="swap-horizontal-outline" size={13} color={colors.primary} />
+              <Text style={[styles.changeExBtnText, { color: colors.primary }]}>변경</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -540,6 +584,17 @@ export default function WorkoutDetailScreen() {
             onAdjust={adjustTimerSeconds}
           />
         )}
+
+        {/* Exercise change modal */}
+        {changeTargetExId && (
+          <ExerciseChangeModal
+            targetWexId={changeTargetExId}
+            editedExercises={editedExercises}
+            onClose={() => setChangeTargetExId(null)}
+            onConfirm={handleChangeExercise}
+            colors={colors}
+          />
+        )}
       </View>
     );
   }
@@ -547,11 +602,14 @@ export default function WorkoutDetailScreen() {
   // ── SMALL/MEDIUM SCREEN: single column ──
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* 진행률 고정 헤더 */}
+      <View style={{ paddingHorizontal: horizontalPad, paddingTop: 12, backgroundColor: colors.background }}>
+        {progressCard}
+      </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad, paddingHorizontal: horizontalPad }]}
       >
-        {progressCard}
         {headerCard}
 
         {workout.notes && (
@@ -592,9 +650,122 @@ export default function WorkoutDetailScreen() {
           onAdjust={adjustTimerSeconds}
         />
       )}
+
+      {/* Exercise change modal */}
+      {changeTargetExId && (
+        <ExerciseChangeModal
+          targetWexId={changeTargetExId}
+          editedExercises={editedExercises}
+          onClose={() => setChangeTargetExId(null)}
+          onConfirm={handleChangeExercise}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }
+
+// ── Exercise change modal ──────────────────────────────────────
+function ExerciseChangeModal({
+  targetWexId,
+  editedExercises,
+  onClose,
+  onConfirm,
+  colors,
+}: {
+  targetWexId: string;
+  editedExercises: WorkoutExercise[];
+  onClose: () => void;
+  onConfirm: (targetWexId: string, newExId: string) => void;
+  colors: any;
+}) {
+  const target = editedExercises.find((ex) => ex.id === targetWexId);
+  if (!target) return null;
+
+  const currentCategory = target.exercise.category;
+  const alternatives = EXERCISES.filter(
+    (e) => e.category === currentCategory && e.id !== target.exercise.id,
+  );
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={exChangeStyles.overlay}>
+        <View style={[exChangeStyles.sheet, { backgroundColor: colors.card }]}>
+          <View style={exChangeStyles.header}>
+            <View>
+              <Text style={[exChangeStyles.title, { color: colors.text }]}>운동 변경</Text>
+              <Text style={[exChangeStyles.subtitle, { color: colors.textSub }]}>
+                {currentCategory} · 현재: {target.exercise.name}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={colors.textSub} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={alternatives}
+            keyExtractor={(e) => e.id}
+            style={exChangeStyles.list}
+            ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
+            ListEmptyComponent={
+              <Text style={[exChangeStyles.empty, { color: colors.textMuted }]}>
+                같은 카테고리의 다른 운동이 없습니다.
+              </Text>
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={exChangeStyles.item}
+                onPress={() => onConfirm(targetWexId, item.id)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[exChangeStyles.itemName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[exChangeStyles.itemSub, { color: colors.textSub }]}>
+                    {[item.equipment, item.description].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const exChangeStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    paddingTop: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  title: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
+  subtitle: { fontSize: 12 },
+  list: { flex: 1 },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  itemName: { fontSize: 15, fontWeight: '600', marginBottom: 3 },
+  itemSub: { fontSize: 12 },
+  empty: { textAlign: 'center', padding: 32, fontSize: 14 },
+});
 
 // ── Timer bar component ──
 function TimerBar({
@@ -772,6 +943,15 @@ const styles = StyleSheet.create({
   exerciseCardHeaderLeft: { flex: 1 },
   exerciseName: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
   muscleGroups: { fontSize: 12 },
+  changeExBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  changeExBtnText: { fontSize: 11, fontWeight: '600' },
   restTimeBadge: {
     flexDirection: 'row',
     alignItems: 'center',

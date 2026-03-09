@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Platform,
   FlatList,
   useWindowDimensions,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -814,40 +816,14 @@ export default function ManageRoutinesScreen() {
             .filter(Boolean)
             .join(', ');
           return (
-            <TouchableOpacity
-              style={[styles.routineCard, { backgroundColor: colors.card, flex: isLarge ? 1 : undefined }]}
-              onLongPress={() => openEditForm(item)}
-              activeOpacity={0.85}
-              delayLongPress={400}
-            >
-              <View style={styles.routineLeft}>
-                <Text style={[styles.routineName, { color: colors.text, fontSize: isLarge ? 17 : 16 }]}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.routineExercises, { color: colors.textSub }]} numberOfLines={2}>
-                  {exerciseNames}
-                </Text>
-                <Text style={[styles.routineCount, { color: colors.primary }]}>
-                  {item.exercises.length}종목
-                </Text>
-              </View>
-              <View style={styles.routineActions}>
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => openEditForm(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => handleDelete(item.id, item.name)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
+            <SwipeableRoutineCard
+              item={item}
+              exerciseNames={exerciseNames}
+              isLarge={isLarge}
+              colors={colors}
+              onEdit={() => openEditForm(item)}
+              onDelete={() => handleDelete(item.id, item.name)}
+            />
           );
         }}
       />
@@ -859,6 +835,123 @@ export default function ManageRoutinesScreen() {
     </View>
   );
 }
+
+// ── Swipeable routine card ────────────────────────────────────
+const DELETE_BTN_W = 84;
+
+function SwipeableRoutineCard({
+  item,
+  exerciseNames,
+  isLarge,
+  colors,
+  onEdit,
+  onDelete,
+}: {
+  item: Routine;
+  exerciseNames: string;
+  isLarge: boolean;
+  colors: any;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isOpen = useRef(false);
+
+  const close = () => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    isOpen.current = false;
+  };
+
+  const open = () => {
+    Animated.spring(translateX, { toValue: -DELETE_BTN_W, useNativeDriver: true, bounciness: 4 }).start();
+    isOpen.current = true;
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 6 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderMove: (_, gs) => {
+        const base = isOpen.current ? -DELETE_BTN_W : 0;
+        const x = Math.max(-DELETE_BTN_W, Math.min(0, base + gs.dx));
+        translateX.setValue(x);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const base = isOpen.current ? -DELETE_BTN_W : 0;
+        const projected = base + gs.dx;
+        if (projected < -DELETE_BTN_W / 2) {
+          open();
+        } else {
+          close();
+        }
+      },
+    }),
+  ).current;
+
+  return (
+    <View style={[swipeStyles.wrapper, { flex: isLarge ? 1 : undefined }]}>
+      {/* 삭제 버튼 (뒤에 깔림) */}
+      <View style={swipeStyles.deleteArea}>
+        <TouchableOpacity
+          style={swipeStyles.deleteBtn}
+          onPress={() => { close(); onDelete(); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={20} color="#fff" />
+          <Text style={swipeStyles.deleteBtnText}>삭제</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 카드 (위에 오버레이) */}
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        <TouchableOpacity
+          style={[styles.routineCard, { backgroundColor: colors.card, marginBottom: 0 }]}
+          onPress={() => { if (isOpen.current) { close(); } else { onEdit(); } }}
+          activeOpacity={0.85}
+        >
+          <View style={styles.routineLeft}>
+            <Text style={[styles.routineName, { color: colors.text, fontSize: isLarge ? 17 : 16 }]}>
+              {item.name}
+            </Text>
+            <Text style={[styles.routineExercises, { color: colors.textSub }]} numberOfLines={2}>
+              {exerciseNames}
+            </Text>
+            <Text style={[styles.routineCount, { color: colors.primary }]}>
+              {item.exercises.length}종목
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+}
+
+const swipeStyles = StyleSheet.create({
+  wrapper: {
+    marginBottom: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  deleteArea: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: DELETE_BTN_W,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteBtn: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deleteBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+});
 
 // ── Styles ────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -874,7 +967,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.07,
@@ -885,8 +977,6 @@ const styles = StyleSheet.create({
   routineName: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
   routineExercises: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
   routineCount: { fontSize: 12, fontWeight: '600' },
-  routineActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  actionBtn: { padding: 4 },
 
   addButton: {
     position: 'absolute',
