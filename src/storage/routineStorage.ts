@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Routine } from '../types';
+import { storageGet, storageSet } from '../utils/storage';
 
 const ROUTINES_KEY = '@ptmaster_routines';
 
@@ -18,7 +18,7 @@ function migrate(raw: any): Routine {
 
 export async function loadRoutines(): Promise<Routine[]> {
   try {
-    const json = await AsyncStorage.getItem(ROUTINES_KEY);
+    const json = await storageGet(ROUTINES_KEY);
     const raw: any[] = json ? JSON.parse(json) : [];
     return raw.map(migrate);
   } catch {
@@ -27,7 +27,7 @@ export async function loadRoutines(): Promise<Routine[]> {
 }
 
 export async function saveRoutines(routines: Routine[]): Promise<void> {
-  await AsyncStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
+  await storageSet(ROUTINES_KEY, JSON.stringify(routines));
 }
 
 export async function addRoutine(routine: Routine): Promise<void> {

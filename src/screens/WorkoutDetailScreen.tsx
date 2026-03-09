@@ -5,8 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -171,7 +171,7 @@ export default function WorkoutDetailScreen() {
   ) => {
     if (currentCompleted) {
       // 완료 → 미완료: 확인 다이얼로그
-      Alert.alert('세트 완료 취소', '이 세트의 완료를 취소하시겠습니까?', [
+      showAlert('세트 완료 취소', '이 세트의 완료를 취소하시겠습니까?', [
         { text: '아니요', style: 'cancel' },
         {
           text: '취소',
@@ -260,12 +260,12 @@ export default function WorkoutDetailScreen() {
     await updateWorkout(updated);
     setWorkout(updated);
     setHasChanges(false);
-    Alert.alert('저장 완료', '운동 기록이 저장되었습니다.');
+    showAlert('저장 완료', '운동 기록이 저장되었습니다.');
   };
 
   const handleDelete = () => {
     if (!workout) return;
-    Alert.alert('운동 삭제', `"${workout.title}"를 삭제할까요?`, [
+    showAlert('운동 삭제', `"${workout.title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',

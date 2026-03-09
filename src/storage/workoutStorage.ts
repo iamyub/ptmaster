@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Workout } from '../types';
+import { storageGet, storageSet } from '../utils/storage';
 
 const WORKOUTS_KEY = '@ptmaster_workouts';
 
 export async function loadWorkouts(): Promise<Workout[]> {
   try {
-    const json = await AsyncStorage.getItem(WORKOUTS_KEY);
+    const json = await storageGet(WORKOUTS_KEY);
     return json ? JSON.parse(json) : [];
   } catch {
     return [];
@@ -13,7 +13,7 @@ export async function loadWorkouts(): Promise<Workout[]> {
 }
 
 export async function saveWorkouts(workouts: Workout[]): Promise<void> {
-  await AsyncStorage.setItem(WORKOUTS_KEY, JSON.stringify(workouts));
+  await storageSet(WORKOUTS_KEY, JSON.stringify(workouts));
 }
 
 export async function addWorkout(workout: Workout): Promise<void> {

@@ -6,8 +6,8 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -136,11 +136,11 @@ export default function AddWorkoutScreen() {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('알림', '운동 제목을 입력해주세요.');
+      showAlert('알림', '운동 제목을 입력해주세요.');
       return;
     }
     if (exercises.length === 0) {
-      Alert.alert('알림', '최소 하나의 운동을 추가해주세요.');
+      showAlert('알림', '최소 하나의 운동을 추가해주세요.');
       return;
     }
     setSaving(true);

@@ -6,12 +6,12 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
-  Alert,
   ScrollView,
   Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -380,11 +380,11 @@ export default function ManageRoutinesScreen() {
 
   const handleSave = async () => {
     if (!routineName.trim()) {
-      Alert.alert('알림', '루틴 이름을 입력해주세요.');
+      showAlert('알림', '루틴 이름을 입력해주세요.');
       return;
     }
     if (formExercises.length === 0) {
-      Alert.alert('알림', '운동을 하나 이상 추가해주세요.');
+      showAlert('알림', '운동을 하나 이상 추가해주세요.');
       return;
     }
     if (formMode === 'add') {
@@ -409,7 +409,7 @@ export default function ManageRoutinesScreen() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert('루틴 삭제', `"${name}"를 삭제할까요?`, [
+    showAlert('루틴 삭제', `"${name}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',

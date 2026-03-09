@@ -7,8 +7,8 @@ import {
   ScrollView,
   Animated,
   PanResponder,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -139,7 +139,7 @@ export default function HomeScreen() {
   const today = format(new Date(), 'M월 d일 (EEEE)', { locale: ko });
 
   const handleDeleteWorkout = (id: string, title: string) => {
-    Alert.alert('운동 삭제', `"${title}"를 삭제할까요?`, [
+    showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',

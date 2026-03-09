@@ -5,9 +5,9 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   ScrollView,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,7 +62,7 @@ export default function HistoryScreen() {
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
 
   const handleDelete = (id: string, title: string) => {
-    Alert.alert('운동 삭제', `"${title}"를 삭제할까요?`, [
+    showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storageGet, storageSet } from '../utils/storage';
 
 const REST_TIME_KEY = '@ptmaster_rest_time';
 const ALARM_SETTINGS_KEY = '@ptmaster_alarm_settings';
@@ -9,7 +9,7 @@ export const DEFAULT_REST_TIME = 90;
 // ── 기본 휴식 시간 ──────────────────────────────────────────
 export async function loadRestTime(): Promise<number> {
   try {
-    const val = await AsyncStorage.getItem(REST_TIME_KEY);
+    const val = await storageGet(REST_TIME_KEY);
     return val ? parseInt(val, 10) : DEFAULT_REST_TIME;
   } catch {
     return DEFAULT_REST_TIME;
@@ -17,7 +17,7 @@ export async function loadRestTime(): Promise<number> {
 }
 
 export async function saveRestTime(seconds: number): Promise<void> {
-  await AsyncStorage.setItem(REST_TIME_KEY, String(seconds));
+  await storageSet(REST_TIME_KEY, String(seconds));
 }
 
 // ── 알람 설정 ────────────────────────────────────────────────
@@ -39,7 +39,7 @@ export const DEFAULT_ALARM_SETTINGS: AlarmSettings = {
 
 export async function loadAlarmSettings(): Promise<AlarmSettings> {
   try {
-    const json = await AsyncStorage.getItem(ALARM_SETTINGS_KEY);
+    const json = await storageGet(ALARM_SETTINGS_KEY);
     return json
       ? { ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(json) }
       : DEFAULT_ALARM_SETTINGS;
@@ -49,7 +49,7 @@ export async function loadAlarmSettings(): Promise<AlarmSettings> {
 }
 
 export async function saveAlarmSettings(settings: AlarmSettings): Promise<void> {
-  await AsyncStorage.setItem(ALARM_SETTINGS_KEY, JSON.stringify(settings));
+  await storageSet(ALARM_SETTINGS_KEY, JSON.stringify(settings));
 }
 
 // ── 운동별 개별 휴식 시간 ─────────────────────────────────────
@@ -58,7 +58,7 @@ export type ExerciseRestTimes = Record<string, number | null>;
 
 export async function loadExerciseRestTimes(): Promise<ExerciseRestTimes> {
   try {
-    const json = await AsyncStorage.getItem(EXERCISE_REST_TIMES_KEY);
+    const json = await storageGet(EXERCISE_REST_TIMES_KEY);
     return json ? JSON.parse(json) : {};
   } catch {
     return {};
@@ -75,5 +75,5 @@ export async function saveExerciseRestTime(
   } else {
     times[exerciseId] = seconds;
   }
-  await AsyncStorage.setItem(EXERCISE_REST_TIMES_KEY, JSON.stringify(times));
+  await storageSet(EXERCISE_REST_TIMES_KEY, JSON.stringify(times));
 }

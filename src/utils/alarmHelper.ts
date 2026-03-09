@@ -25,11 +25,11 @@ const SOUND_VIBRATION_SUBS: Record<SoundType, number[]> = {
 };
 
 function vibrate(pattern: number[]) {
+  if (Platform.OS === 'web') return; // 웹에서는 진동 무시
   if (Platform.OS === 'ios') {
     // iOS는 패턴 진동 미지원 → 단발로 대체
     Vibration.vibrate();
   } else {
-    // Android + Web(navigator.vibrate): 패턴 지원
     Vibration.vibrate(pattern);
   }
 }

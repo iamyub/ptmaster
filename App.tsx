@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── 에러 바운더리 (웹 흰 화면 방지) ──────────────────────────
 class ErrorBoundary extends React.Component<
@@ -42,11 +42,17 @@ import AddWorkoutScreen from './src/screens/AddWorkoutScreen';
 import WorkoutDetailScreen from './src/screens/WorkoutDetailScreen';
 import ManageRoutinesScreen from './src/screens/ManageRoutinesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import WebAlertModal, { WebAlertRef } from './src/components/WebAlertModal';
+import { registerWebAlert } from './src/utils/alert';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 74 + insets.bottom;
+  const tabBarPaddingBottom = 10 + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -56,8 +62,8 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopColor: '#F0F0F0',
-          height: 74,
-          paddingBottom: 10,
+          height: tabBarHeight,
+          paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: '#4F8EF7',
@@ -101,41 +107,90 @@ function MainTabs() {
 }
 
 export default function App() {
+  const alertRef = useRef<WebAlertRef>(null);
+
+  useEffect(() => {
+    // 웹 Alert 모달 등록
+    if (Platform.OS === 'web') {
+      registerWebAlert((title, message, buttons) => {
+        alertRef.current?.show(title, message, buttons);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    // 모바일 브라우저 viewport 높이 문제 수정 (100vh vs dvh)
+    const setAppHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+
+    // viewport-fit=cover 적용 (safe area inset 활성화)
+    const metaViewport = document.querySelector('meta[name="viewport"]');
+    if (metaViewport) {
+      metaViewport.setAttribute(
+        'content',
+        'width=device-width, initial-scale=1, viewport-fit=cover',
+      );
+    }
+
+    // dvh 지원 CSS 주입
+    const style = document.createElement('style');
+    style.textContent = `
+      html, body, #root {
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden;
+      }
+      * { -webkit-tap-highlight-color: transparent; }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      window.removeEventListener('resize', setAppHeight);
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      <Stack.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: '#fff' },
-          headerTitleStyle: { fontWeight: '700', color: '#1A1A2E' },
-          headerTintColor: '#4F8EF7',
-        }}
-      >
-        <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-        <Stack.Screen
-          name="AddWorkout"
-          component={AddWorkoutScreen}
-          options={{ title: '운동 추가', presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="WorkoutDetail"
-          component={WorkoutDetailScreen}
-          options={{ title: '운동 상세' }}
-        />
-        <Stack.Screen
-          name="ManageRoutines"
-          component={ManageRoutinesScreen}
-          options={{ title: '루틴 관리' }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: '설정' }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+        <NavigationContainer>
+          <StatusBar style="dark" />
+          <Stack.Navigator
+            screenOptions={{
+              headerStyle: { backgroundColor: '#fff' },
+              headerTitleStyle: { fontWeight: '700', color: '#1A1A2E' },
+              headerTintColor: '#4F8EF7',
+            }}
+          >
+            <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="AddWorkout"
+              component={AddWorkoutScreen}
+              options={{ title: '운동 추가', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="WorkoutDetail"
+              component={WorkoutDetailScreen}
+              options={{ title: '운동 상세' }}
+            />
+            <Stack.Screen
+              name="ManageRoutines"
+              component={ManageRoutinesScreen}
+              options={{ title: '루틴 관리' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ title: '설정' }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+        {Platform.OS === 'web' && <WebAlertModal ref={alertRef} />}
       </SafeAreaProvider>
     </ErrorBoundary>
   );
