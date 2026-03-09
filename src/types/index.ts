@@ -56,7 +56,7 @@ export interface Routine {
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  WorkoutDetail: { workoutId: string };
+  WorkoutDetail: { workoutId: string; autoStart?: boolean };
   AddWorkout: { routineExercises?: RoutineExercise[]; routineName?: string } | undefined;
   AddExercise: { workoutId: string };
   ExerciseDetail: { exerciseId: string };

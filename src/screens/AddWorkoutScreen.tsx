@@ -156,7 +156,7 @@ export default function AddWorkoutScreen() {
         notes: notes.trim() || undefined,
       };
       await addWorkout(workout);
-      navigation.goBack();
+      navigation.replace('WorkoutDetail', { workoutId: workout.id, autoStart: true });
     } catch {
       showAlert('오류', '운동 기록 저장에 실패했습니다.');
     } finally {

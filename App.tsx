@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,6 +14,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // ── Error boundary ─────────────────────────────────────────────
@@ -64,9 +66,9 @@ function MiniWorkoutBar({
 }: {
   onPress: () => void;
 }) {
-  const { activeWorkout, timerActive, timerSeconds } = useWorkout();
+  const { activeWorkout, timerActive, timerSeconds, isWorkoutRunning } = useWorkout();
   const { colors } = useTheme();
-  if (!activeWorkout) return null;
+  if (!activeWorkout || !isWorkoutRunning) return null;
 
   const progress =
     activeWorkout.totalSets > 0
@@ -148,7 +150,7 @@ function MainTabs({
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { activeWorkout } = useWorkout();
+  const { activeWorkout, isWorkoutRunning } = useWorkout();
   const { width } = useWindowDimensions();
 
   const isLarge = width >= 600;
@@ -157,7 +159,7 @@ function MainTabs({
   const iconSize = isLarge ? 26 : 22;
   const labelSize = isLarge ? 13 : 11;
   const tabBarHeight = isLarge ? 80 : 74;
-  const totalTabBarHeight = tabBarHeight + insets.bottom + (activeWorkout ? MINI_BAR_HEIGHT : 0);
+  const totalTabBarHeight = tabBarHeight + insets.bottom + (activeWorkout && isWorkoutRunning ? MINI_BAR_HEIGHT : 0);
   const paddingBottom = (isLarge ? 12 : 10) + insets.bottom;
 
   return (
@@ -192,7 +194,7 @@ function MainTabs({
         <Tab.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: '피티마스터', tabBarLabel: '홈' }}
+          options={{ headerShown: false, tabBarLabel: '홈' }}
         />
         <Tab.Screen
           name="History"
@@ -212,7 +214,7 @@ function MainTabs({
       </Tab.Navigator>
 
       {/* Mini workout bar – sits above tab bar */}
-      {activeWorkout && (
+      {activeWorkout && isWorkoutRunning && (
         <View
           style={{
             position: 'absolute',
@@ -322,12 +324,32 @@ function AppInner() {
   );
 }
 
+// 포그라운드 상태에서도 알림 소리/뱃지는 처리하되 배너는 앱 내 UI로 대체
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export default function App() {
+  useEffect(() => {
+    (async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        await Notifications.requestPermissionsAsync();
+      }
+    })();
+  }, []);
+
   return (
-    <ThemeProvider>
-      <WorkoutProvider>
-        <AppInner />
-      </WorkoutProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <WorkoutProvider>
+          <AppInner />
+        </WorkoutProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

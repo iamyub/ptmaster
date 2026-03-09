@@ -10,28 +10,30 @@
 import { Vibration, Platform } from 'react-native';
 import { AlarmSettings, VibrationPattern, SoundType } from '../storage/settingsStorage';
 
-// ── 진동 패턴 정의 ──────────────────────────────────────────
-// short:  짧게 단발 (200ms)
-// medium: 400ms 3회, 간격 300ms
-// long:   800ms 3회, 간격 400ms
+// ── 진동 패턴 정의 ──────────────────────────────────────────────
+// [대기, 진동, 간격, 진동, ...]
 const VIBRATION_PATTERNS: Record<VibrationPattern, number[]> = {
-  short:  [200],
-  medium: [1000],
-  long:   [1800],
+  once:   [0, 500],
+  twice:  [0, 500, 300, 500],
+  thrice: [0, 500, 300, 500, 300, 500],
 };
 
 // 소리 타입별 대체 진동 패턴
 const SOUND_VIBRATION_SUBS: Record<SoundType, number[]> = {
-  beep:  [0, 80, 40, 80, 40, 80],        // 짧고 빠른 세 번
-  bell:  [0, 120, 60, 500],               // 짧게 후 길게 (벨 느낌)
-  chime: [0, 100, 60, 150, 60, 250, 60, 500], // 점층적
+  beep:  [0, 80, 40, 80, 40, 80],
+  bell:  [0, 120, 60, 500],
+  chime: [0, 100, 60, 150, 60, 250, 60, 500],
 };
 
-function vibrate(pattern: number | number[]) {
-  if (Platform.OS === 'web') return; // 웹에서는 진동 무시
+function vibrate(pattern: number[]) {
+  if (Platform.OS === 'web') return;
   if (Platform.OS === 'ios') {
-    // iOS는 패턴 진동 미지원 → 단발로 대체
+    // iOS는 패턴 진동 미지원 → 단발 Vibration으로 대체
+    const vibeCount = Math.floor(pattern.filter((_, i) => i % 2 === 1).length);
     Vibration.vibrate();
+    for (let i = 1; i < vibeCount; i++) {
+      setTimeout(() => Vibration.vibrate(), i * 800);
+    }
   } else {
     Vibration.vibrate(pattern);
   }
@@ -68,7 +70,7 @@ export function fireAlarm(settings: AlarmSettings): void {
   }
 
   if (alarmType === 'both') {
-    // 진동도 함께
+    // 진동도 함께 (약간 딜레이 후)
     setTimeout(
       () => vibrate(VIBRATION_PATTERNS[vibrationPattern]),
       Platform.OS === 'android' ? 700 : 400,

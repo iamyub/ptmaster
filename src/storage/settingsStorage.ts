@@ -22,7 +22,7 @@ export async function saveRestTime(seconds: number): Promise<void> {
 
 // ── 알람 설정 ────────────────────────────────────────────────
 export type AlarmType = 'vibration' | 'sound' | 'both' | 'none';
-export type VibrationPattern = 'short' | 'medium' | 'long';
+export type VibrationPattern = 'once' | 'twice' | 'thrice';
 export type SoundType = 'beep' | 'bell' | 'chime';
 
 export interface AlarmSettings {
@@ -33,16 +33,29 @@ export interface AlarmSettings {
 
 export const DEFAULT_ALARM_SETTINGS: AlarmSettings = {
   alarmType: 'vibration',
-  vibrationPattern: 'medium',
+  vibrationPattern: 'twice',
   soundType: 'bell',
 };
+
+// 기존 short/medium/long 값을 새 값으로 마이그레이션
+function migrateVibrationPattern(raw: string): VibrationPattern {
+  if (raw === 'short') return 'once';
+  if (raw === 'medium') return 'twice';
+  if (raw === 'long') return 'thrice';
+  if (raw === 'once' || raw === 'twice' || raw === 'thrice') return raw as VibrationPattern;
+  return DEFAULT_ALARM_SETTINGS.vibrationPattern;
+}
 
 export async function loadAlarmSettings(): Promise<AlarmSettings> {
   try {
     const json = await storageGet(ALARM_SETTINGS_KEY);
-    return json
-      ? { ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(json) }
-      : DEFAULT_ALARM_SETTINGS;
+    if (!json) return DEFAULT_ALARM_SETTINGS;
+    const parsed = JSON.parse(json);
+    return {
+      ...DEFAULT_ALARM_SETTINGS,
+      ...parsed,
+      vibrationPattern: migrateVibrationPattern(parsed.vibrationPattern ?? ''),
+    };
   } catch {
     return DEFAULT_ALARM_SETTINGS;
   }

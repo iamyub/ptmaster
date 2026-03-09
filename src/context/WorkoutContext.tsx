@@ -1,6 +1,23 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AlarmSettings, DEFAULT_ALARM_SETTINGS } from '../storage/settingsStorage';
+import * as Notifications from 'expo-notifications';
+import { AlarmSettings, DEFAULT_ALARM_SETTINGS, loadAlarmSettings } from '../storage/settingsStorage';
 import { fireAlarm } from '../utils/alarmHelper';
+
+async function sendRestEndNotification() {
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⏱ 휴식 종료',
+        body: '다음 세트를 시작하세요!',
+        sound: true,
+      },
+      trigger: null,
+    });
+    console.log('[알림 전송됨]', id);
+  } catch (e) {
+    console.warn('[알림 전송 실패]', e);
+  }
+}
 
 export interface ActiveWorkout {
   workoutId: string;
@@ -21,6 +38,8 @@ interface WorkoutContextValue {
   resetTimer: () => void;
   adjustTimerSeconds: (delta: number) => void;
   endWorkout: () => void;
+  isWorkoutRunning: boolean;
+  setWorkoutRunning: (running: boolean) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue>({
@@ -35,6 +54,8 @@ const WorkoutContext = createContext<WorkoutContextValue>({
   resetTimer: () => {},
   adjustTimerSeconds: () => {},
   endWorkout: () => {},
+  isWorkoutRunning: false,
+  setWorkoutRunning: () => {},
 });
 
 export const MINI_BAR_HEIGHT = 52;
@@ -44,9 +65,14 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [timerActive, setTimerActive] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerDuration, setTimerDuration] = useState(90);
+  const [isWorkoutRunning, setIsWorkoutRunning] = useState(false);
   const timerDurationRef = useRef(90);
   const alarmRef = useRef<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const setWorkoutRunning = useCallback((running: boolean) => {
+    setIsWorkoutRunning(running);
+  }, []);
 
   useEffect(() => {
     timerDurationRef.current = timerDuration;
@@ -63,7 +89,11 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             timerRef.current = null;
           }
           setTimerActive(false);
-          fireAlarm(alarmRef.current);
+          // 최신 설정값으로 알람 실행 (설정 변경이 즉시 반영됨)
+          loadAlarmSettings().then((freshSettings) => {
+            fireAlarm(freshSettings);
+          });
+          sendRestEndNotification();
           return 0;
         }
         return s - 1;
@@ -133,6 +163,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setTimerSeconds(0);
     setTimerDuration(90);
     setActiveWorkout(null);
+    setIsWorkoutRunning(false);
   }, []);
 
   return (
@@ -149,6 +180,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         resetTimer,
         adjustTimerSeconds,
         endWorkout,
+        isWorkoutRunning,
+        setWorkoutRunning,
       }}
     >
       {children}

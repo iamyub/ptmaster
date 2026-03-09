@@ -10,6 +10,8 @@ import {
   FlatList,
   TextInput,
 } from 'react-native';
+import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +36,7 @@ import { formatSeconds } from '../utils/timeFormat';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout } from '../context/WorkoutContext';
+import { isWorkoutExpired } from '../utils/workoutUtils';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -58,17 +61,38 @@ export default function WorkoutDetailScreen() {
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
-  const { workoutId } = route.params;
+  const { workoutId, autoStart } = route.params;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
   const isLarge = width >= 600;
   const isMedium = width >= 400;
 
+  // ── Workout context (must come before useState that depends on it) ──
+  const {
+    activeWorkout,
+    timerActive,
+    timerSeconds,
+    timerDuration,
+    initWorkout,
+    updateProgress,
+    startTimer,
+    skipTimer,
+    resetTimer,
+    adjustTimerSeconds,
+    endWorkout,
+    isWorkoutRunning,
+    setWorkoutRunning,
+  } = useWorkout();
+
   // ── State ──
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [editedExercises, setEditedExercises] = useState<WorkoutExercise[]>([]);
-  const [isWorkoutPaused, setIsWorkoutPaused] = useState(false);
+  // Preserve running state if this workout was already active in context.
+  // Only auto-start for new workouts (autoStart param), never auto-terminate on re-entry.
+  const wasRunning = activeWorkout?.workoutId === workoutId && isWorkoutRunning;
+  const [isWorkoutPaused, setIsWorkoutPaused] = useState(!(autoStart || wasRunning));
+  const [isExpired, setIsExpired] = useState(false);
   const [selectedExId, setSelectedExId] = useState<string | null>(null);
   const [changeTargetExId, setChangeTargetExId] = useState<string | null>(null);
   const [showAddExModal, setShowAddExModal] = useState(false);
@@ -90,19 +114,10 @@ export default function WorkoutDetailScreen() {
     workoutRef.current = workout;
   }, [workout]);
 
-  // ── Workout context ──
-  const {
-    timerActive,
-    timerSeconds,
-    timerDuration,
-    initWorkout,
-    updateProgress,
-    startTimer,
-    skipTimer,
-    resetTimer,
-    adjustTimerSeconds,
-    endWorkout,
-  } = useWorkout();
+  // Sync running state to WorkoutContext (controls mini bar visibility)
+  useEffect(() => {
+    setWorkoutRunning(!isWorkoutPaused && !isExpired);
+  }, [isWorkoutPaused, isExpired, setWorkoutRunning]);
 
   // ── Load settings ──
   useEffect(() => {
@@ -122,6 +137,7 @@ export default function WorkoutDetailScreen() {
   // ── Load workout ──
   useFocusEffect(
     useCallback(() => {
+      isInitializedRef.current = false; // reset before reload so auto-save doesn't fire mid-load
       loadWorkouts().then((all) => {
         const found = all.find((w) => w.id === workoutId);
         if (found) {
@@ -131,6 +147,9 @@ export default function WorkoutDetailScreen() {
             sets: ex.sets.map((s) => ({ ...s })),
           }));
           setEditedExercises(exs);
+          if (isWorkoutExpired(found)) {
+            setIsExpired(true);
+          }
           if (isLarge && exs.length > 0) {
             setSelectedExId((prev) => prev ?? exs[0].id);
           }
@@ -241,11 +260,6 @@ export default function WorkoutDetailScreen() {
     setIsWorkoutPaused(false);
   };
 
-  const handleGoToMain = () => {
-    endWorkout();
-    navigation.goBack();
-  };
-
   const toggleCompleted = (
     exId: string,
     setId: string,
@@ -260,6 +274,7 @@ export default function WorkoutDetailScreen() {
           text: '취소',
           style: 'destructive',
           onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setEditedExercises((prev) =>
               prev.map((ex) => {
                 if (ex.id !== exId) return ex;
@@ -275,6 +290,7 @@ export default function WorkoutDetailScreen() {
       ]);
       return;
     }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setEditedExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exId) return ex;
@@ -335,28 +351,19 @@ export default function WorkoutDetailScreen() {
     );
   };
 
-  // #2: 운동 변경 - 세트/무게/횟수 원래대로 유지
   const handleChangeExercise = (targetWexId: string, newExerciseId: string) => {
     const newEx = EXERCISES.find((e) => e.id === newExerciseId);
     if (!newEx) return;
-    showAlert(
-      '운동 변경',
-      `"${displayName(newEx)}"으로 변경합니다.\n기존 세트 기록은 유지됩니다.`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '변경',
-          onPress: () => {
-            setChangeTargetExId(null);
-            setEditedExercises((prev) =>
-              prev.map((ex) => {
-                if (ex.id !== targetWexId) return ex;
-                return { ...ex, exercise: newEx }; // 세트/무게/횟수 유지
-              }),
-            );
-          },
-        },
-      ],
+    setChangeTargetExId(null);
+    setEditedExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== targetWexId) return ex;
+        return {
+          ...ex,
+          exercise: newEx,
+          sets: ex.sets.map((s) => ({ ...s, completed: false })),
+        };
+      }),
     );
   };
 
@@ -410,14 +417,24 @@ export default function WorkoutDetailScreen() {
   const horizontalPad = isLarge ? 24 : isMedium ? 18 : 16;
 
   // ── Exercise card renderer ──
-  const renderExerciseCard = (ex: WorkoutExercise) => {
+  const renderExerciseCard = (ex: WorkoutExercise, drag?: () => void, isActive?: boolean) => {
     const customRestTime = exerciseRestTimes[ex.exercise.id];
     const effectiveRestTime = customRestTime != null ? customRestTime : defaultRestTime;
     const exCompletedSets = ex.sets.filter((s) => s.completed).length;
 
     return (
-      <View key={ex.id} style={[styles.exerciseCard, { backgroundColor: colors.card }]}>
+      <View style={[styles.exerciseCard, { backgroundColor: colors.card }, isActive && styles.exerciseCardDragging]}>
         <View style={styles.exerciseCardHeader}>
+          {drag && (
+            <TouchableOpacity
+              onLongPress={drag}
+              delayLongPress={200}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+              style={styles.dragHandle}
+            >
+              <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
           <View style={styles.exerciseCardHeaderLeft}>
             <Text style={[styles.exerciseName, { color: colors.text, fontSize: isLarge ? 18 : 17 }]}>
               {displayName(ex.exercise)}
@@ -435,8 +452,9 @@ export default function WorkoutDetailScreen() {
               <Text style={styles.restTimeBadgeText}>{formatSeconds(effectiveRestTime)}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.changeExBtn, { backgroundColor: colors.chipBg }]}
-              onPress={() => setChangeTargetExId(ex.id)}
+              style={[styles.changeExBtn, { backgroundColor: colors.chipBg }, (isWorkoutPaused || isExpired) && { opacity: 0.4 }]}
+              onPress={() => !(isWorkoutPaused || isExpired) && setChangeTargetExId(ex.id)}
+              disabled={isWorkoutPaused || isExpired}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
               <Ionicons name="swap-horizontal-outline" size={13} color={colors.primary} />
@@ -531,36 +549,15 @@ export default function WorkoutDetailScreen() {
   // ── Action buttons ──
   const actionButtons = (
     <View style={styles.actionButtonsWrap}>
-      {/* #1: 운동 추가 버튼 */}
       <TouchableOpacity
         style={[styles.addExerciseButton, { borderColor: colors.primary }]}
         onPress={() => setShowAddExModal(true)}
-        disabled={isWorkoutPaused}
       >
-        <Ionicons name="add-circle-outline" size={18} color={isWorkoutPaused ? '#ccc' : colors.primary} />
-        <Text style={[styles.addExerciseButtonText, { color: isWorkoutPaused ? '#ccc' : colors.primary }]}>
+        <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+        <Text style={[styles.addExerciseButtonText, { color: colors.primary }]}>
           운동 추가
         </Text>
       </TouchableOpacity>
-
-      {/* #3/#5: 종료/재개/메인화면 */}
-      {isWorkoutPaused ? (
-        <>
-          <TouchableOpacity style={styles.resumeWorkoutButton} onPress={handleResumeWorkout}>
-            <Ionicons name="play-circle-outline" size={18} color="#fff" />
-            <Text style={styles.resumeWorkoutButtonText}>운동 재개</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.goMainButton} onPress={handleGoToMain}>
-            <Ionicons name="home-outline" size={16} color={colors.primary} />
-            <Text style={[styles.goMainButtonText, { color: colors.primary }]}>메인화면으로</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <TouchableOpacity style={styles.endWorkoutButton} onPress={handlePauseWorkout}>
-          <Ionicons name="stop-circle-outline" size={18} color="#fff" />
-          <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
-        </TouchableOpacity>
-      )}
 
       <TouchableOpacity
         style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
@@ -573,41 +570,81 @@ export default function WorkoutDetailScreen() {
   );
 
   // ── Progress card ──
-  const progressCard = (
-    <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
-      <View style={styles.progressHeader}>
-        <Text style={[styles.progressLabel, { color: colors.textSub }]}>운동 진행률</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {isWorkoutPaused && (
-            <View style={[styles.pausedBadge, { backgroundColor: '#FF8C0020' }]}>
-              <Ionicons name="pause-circle-outline" size={12} color="#FF8C00" />
-              <Text style={styles.pausedBadgeText}>종료됨</Text>
+  const progressCard = (() => {
+    const progressBarColor = isWorkoutPaused || isExpired ? '#BBBBBB' : '#4F8EF7';
+    return (
+      <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
+        <View style={styles.progressHeader}>
+          {/* Status badge */}
+          {isExpired ? (
+            <View style={[styles.statusBadge, { backgroundColor: '#88888820' }]}>
+              <Text style={[styles.statusDot, { color: '#888888' }]}>■</Text>
+              <Text style={[styles.statusBadgeText, { color: '#888888' }]}>기간 만료</Text>
+            </View>
+          ) : isWorkoutPaused ? (
+            <View style={[styles.statusBadge, { backgroundColor: '#FF5C5C20' }]}>
+              <Text style={[styles.statusDot, { color: '#FF5C5C' }]}>■</Text>
+              <Text style={[styles.statusBadgeText, { color: '#FF5C5C' }]}>종료된 운동</Text>
+            </View>
+          ) : (
+            <View style={[styles.statusBadge, { backgroundColor: '#34C75920' }]}>
+              <Text style={[styles.statusDot, { color: '#34C759' }]}>●</Text>
+              <Text style={[styles.statusBadgeText, { color: '#34C759' }]}>운동 중</Text>
             </View>
           )}
-          <Text style={styles.progressCount}>
-            {completedSets} / {totalSets} 세트
-          </Text>
+
+          {/* Right: count + action button */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.progressCount}>
+              {completedSets} / {totalSets} 세트
+            </Text>
+            {isExpired ? null : isWorkoutPaused ? (
+              <TouchableOpacity
+                style={[styles.progressActionBtn, styles.progressResumeLargeBtn]}
+                onPress={handleResumeWorkout}
+              >
+                <Ionicons name="play" size={13} color="#fff" />
+                <Text style={styles.progressResumeLargeBtnText}>운동 재개</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.progressActionBtn, styles.progressEndLargeBtn]}
+                onPress={handlePauseWorkout}
+              >
+                <Ionicons name="stop" size={13} color="#fff" />
+                <Text style={styles.progressEndLargeBtnText}>운동 종료</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: progressBarColor }]} />
+        </View>
+        {estimatedMinutesRemaining > 0 && completedSets < totalSets && !isWorkoutPaused && !isExpired && (
+          <View style={styles.estimatedRow}>
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+            <Text style={[styles.estimatedText, { color: colors.textMuted }]}>
+              약 {estimatedMinutesRemaining}분 남았어요
+            </Text>
+          </View>
+        )}
+        {completedSets === totalSets && totalSets > 0 && (
+          <View style={styles.estimatedRow}>
+            <Ionicons name="checkmark-circle" size={13} color="#34C759" />
+            <Text style={[styles.estimatedText, { color: '#34C759' }]}>모든 세트 완료!</Text>
+          </View>
+        )}
+        {isExpired && (
+          <View style={styles.estimatedRow}>
+            <Ionicons name="time-outline" size={13} color="#888" />
+            <Text style={[styles.estimatedText, { color: '#888' }]}>
+              오늘 날짜가 지난 운동입니다.
+            </Text>
+          </View>
+        )}
       </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
-      {estimatedMinutesRemaining > 0 && completedSets < totalSets && !isWorkoutPaused && (
-        <View style={styles.estimatedRow}>
-          <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-          <Text style={[styles.estimatedText, { color: colors.textMuted }]}>
-            약 {estimatedMinutesRemaining}분 남았어요
-          </Text>
-        </View>
-      )}
-      {completedSets === totalSets && totalSets > 0 && (
-        <View style={styles.estimatedRow}>
-          <Ionicons name="checkmark-circle" size={13} color="#34C759" />
-          <Text style={[styles.estimatedText, { color: '#34C759' }]}>모든 세트 완료!</Text>
-        </View>
-      )}
-    </View>
-  );
+    );
+  })();
 
   // ── Header card ──
   const headerCard = (
@@ -756,8 +793,9 @@ export default function WorkoutDetailScreen() {
       <View style={{ paddingHorizontal: horizontalPad, paddingTop: 12, backgroundColor: colors.background }}>
         {progressCard}
       </View>
-      <ScrollView
+      <NestableScrollContainer
         style={styles.container}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: bottomPad, paddingHorizontal: horizontalPad },
@@ -772,9 +810,16 @@ export default function WorkoutDetailScreen() {
           </View>
         )}
 
-        {editedExercises.map(renderExerciseCard)}
+        <NestableDraggableFlatList
+          data={editedExercises}
+          keyExtractor={(ex) => ex.id}
+          onDragEnd={({ data }) => setEditedExercises(data)}
+          renderItem={({ item, drag, isActive }: RenderItemParams<WorkoutExercise>) =>
+            renderExerciseCard(item, drag, isActive)
+          }
+        />
         {actionButtons}
-      </ScrollView>
+      </NestableScrollContainer>
 
       {timerActive && (
         <TimerBar
@@ -914,12 +959,14 @@ function ExerciseChangeModal({
   const target = editedExercises.find((ex) => ex.id === targetWexId);
   if (!target) return null;
 
-  const currentCategory = target.exercise.category;
+  // Use live exercise data from EXERCISES to ensure alternativeExercises/category are up-to-date
+  const liveEx = EXERCISES.find((e) => e.id === target.exercise.id) ?? target.exercise;
+  const currentCategory = liveEx.category;
 
   const altIds =
-    customAlternatives[target.exercise.id] !== undefined
-      ? customAlternatives[target.exercise.id]
-      : (target.exercise.alternativeExercises ?? []);
+    customAlternatives[liveEx.id] !== undefined
+      ? customAlternatives[liveEx.id]
+      : (liveEx.alternativeExercises ?? []);
 
   const altSet = new Set(altIds);
   const altExercises = altIds
@@ -955,19 +1002,15 @@ function ExerciseChangeModal({
               <Ionicons name="close" size={22} color={colors.textSub} />
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={listData}
-            keyExtractor={(item) => item.id}
-            style={exChangeStyles.list}
-            ListEmptyComponent={
+          <ScrollView style={exChangeStyles.list} bounces={false}>
+            {listData.length === 0 ? (
               <Text style={[exChangeStyles.empty, { color: colors.textMuted }]}>
                 변경 가능한 운동이 없습니다.
               </Text>
-            }
-            renderItem={({ item }) => {
+            ) : listData.map((item) => {
               if (item._type === 'header') {
                 return (
-                  <View style={[exChangeStyles.sectionHeader, { backgroundColor: colors.cardAlt }]}>
+                  <View key={item.id} style={[exChangeStyles.sectionHeader, { backgroundColor: colors.cardAlt }]}>
                     <Text style={[exChangeStyles.sectionHeaderText, { color: colors.textSub }]}>
                       {item.title}
                     </Text>
@@ -976,6 +1019,7 @@ function ExerciseChangeModal({
               }
               return (
                 <TouchableOpacity
+                  key={item.id}
                   style={[exChangeStyles.item, { borderBottomColor: colors.border }]}
                   onPress={() => onConfirm(targetWexId, item.id)}
                   activeOpacity={0.7}
@@ -991,8 +1035,8 @@ function ExerciseChangeModal({
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1100,7 +1144,7 @@ const addExStyles = StyleSheet.create({
 
 const exChangeStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingTop: 20 },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 20 },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1109,7 +1153,8 @@ const exChangeStyles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
   subtitle: { fontSize: 12 },
-  list: { flex: 1 },
+  // Explicit height prevents 0-height rendering inside maxHeight-only containers on React Native Web
+  list: { maxHeight: 340, minHeight: 80 },
   sectionHeader: { paddingHorizontal: 20, paddingVertical: 8 },
   sectionHeaderText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   item: {
@@ -1154,14 +1199,23 @@ const styles = StyleSheet.create({
   progressLabel: { fontSize: 13, fontWeight: '600' },
   progressCount: { fontSize: 13, fontWeight: '700', color: '#4F8EF7' },
   progressTrack: { height: 8, backgroundColor: '#EEF0F5', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: 8, backgroundColor: '#4F8EF7', borderRadius: 4 },
+  progressFill: { height: 8, borderRadius: 4 },
   estimatedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
   estimatedText: { fontSize: 12, fontWeight: '500' },
-  pausedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
-  pausedBadgeText: { fontSize: 10, fontWeight: '700', color: '#FF8C00' },
+  statusDot: { fontSize: 9, lineHeight: 14 },
+  statusBadgeText: { fontSize: 11, fontWeight: '700' },
+  progressActionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8,
+  },
+  progressEndLargeBtn: { backgroundColor: '#FF5C5C' },
+  progressResumeLargeBtn: { backgroundColor: '#34C759' },
+  progressEndLargeBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  progressResumeLargeBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
   headerCard: {
     borderRadius: 16, padding: 20, marginBottom: 12,
@@ -1185,7 +1239,14 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
   },
-  exerciseCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  exerciseCardDragging: {
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  exerciseCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, gap: 6 },
+  dragHandle: { paddingTop: 2, paddingRight: 2 },
   exerciseCardHeaderLeft: { flex: 1 },
   exerciseName: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
   muscleGroups: { fontSize: 12 },
@@ -1230,26 +1291,6 @@ const styles = StyleSheet.create({
     borderRadius: 14, borderWidth: 1.5, padding: 14, marginBottom: 10,
   },
   addExerciseButtonText: { fontSize: 15, fontWeight: '600' },
-  endWorkoutButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#FF8C00', borderRadius: 14, padding: 16, marginBottom: 10,
-    shadowColor: '#FF8C00', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
-  },
-  endWorkoutButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
-  resumeWorkoutButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#34C759', borderRadius: 14, padding: 16, marginBottom: 10,
-    shadowColor: '#34C759', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
-  },
-  resumeWorkoutButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
-  goMainButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderRadius: 14, borderWidth: 1.5, padding: 14, marginBottom: 10,
-    borderColor: '#4F8EF7',
-  },
-  goMainButtonText: { fontSize: 15, fontWeight: '600' },
   deleteButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderRadius: 12, padding: 14, marginTop: 4,

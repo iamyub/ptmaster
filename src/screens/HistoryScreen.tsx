@@ -240,6 +240,12 @@ export default function HistoryScreen() {
       return d;
     });
 
+    const weekEnd = addWeeks(weekStart, 1);
+    const weekWorkoutCount = workouts.filter((w) => {
+      const d = parseISO(w.date);
+      return d >= weekStart && d < weekEnd;
+    }).length;
+
     return (
       <ScrollView
         style={styles.list}
@@ -267,6 +273,13 @@ export default function HistoryScreen() {
           >
             <Ionicons name="chevron-forward" size={22} color="#4F8EF7" />
           </TouchableOpacity>
+        </View>
+
+        <View style={[styles.weekSummary, { backgroundColor: colors.card }]}>
+          <Ionicons name="barbell-outline" size={14} color="#4F8EF7" />
+          <Text style={[styles.weekSummaryText, { color: colors.textSub }]}>
+            이번 주 <Text style={{ color: colors.text, fontWeight: '700' }}>{weekWorkoutCount}회</Text> 운동
+          </Text>
         </View>
 
         <View style={[styles.weekGrid, { backgroundColor: colors.card }]}>
@@ -319,6 +332,10 @@ export default function HistoryScreen() {
   const MonthlyView = () => {
     const year = monthDate.getFullYear();
     const month = monthDate.getMonth();
+    const monthWorkoutCount = workouts.filter((w) => {
+      const d = parseISO(w.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    }).length;
     const firstDay = startOfMonth(monthDate);
     let startOffset = getDay(firstDay) - 1;
     if (startOffset < 0) startOffset = 6;
@@ -362,6 +379,14 @@ export default function HistoryScreen() {
           >
             <Ionicons name="chevron-forward" size={22} color="#4F8EF7" />
           </TouchableOpacity>
+        </View>
+
+        <View style={[styles.weekSummary, { backgroundColor: colors.card }]}>
+          <Ionicons name="barbell-outline" size={14} color="#4F8EF7" />
+          <Text style={[styles.weekSummaryText, { color: colors.textSub }]}>
+            {format(monthDate, 'M월', { locale: ko })} 총{' '}
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{monthWorkoutCount}회</Text> 운동
+          </Text>
         </View>
 
         <View style={styles.calHeaderRow}>
@@ -481,6 +506,17 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 13, color: '#4F8EF7', fontWeight: '500' },
 
   gridRow: { flexDirection: 'row', marginBottom: 0 },
+
+  weekSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  weekSummaryText: { fontSize: 14 },
 
   navRow: {
     flexDirection: 'row',

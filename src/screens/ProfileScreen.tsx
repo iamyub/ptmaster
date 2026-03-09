@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -92,6 +94,34 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
 
+  const handlePickPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const uri = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        const updated = { ...profile, photoUri: uri };
+        setProfile(updated);
+        await saveProfile(updated);
+      }
+    } catch {
+      Alert.alert('오류', '사진을 불러오는 데 실패했습니다.');
+    }
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -102,13 +132,18 @@ export default function ProfileScreen() {
         {/* 아바타 */}
         <TouchableOpacity
           style={styles.avatarWrap}
-          onPress={() =>
-            Alert.alert('사진 변경', '이미지 업로드 기능은 준비 중입니다.')
-          }
+          onPress={handlePickPhoto}
           activeOpacity={0.8}
         >
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>{initials || '?'}</Text>
+            {profile.photoUri ? (
+              <Image
+                source={{ uri: profile.photoUri }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarInitials}>{initials || '?'}</Text>
+            )}
           </View>
           <View style={styles.avatarCameraOverlay}>
             <Ionicons name="camera-outline" size={14} color="#fff" />
@@ -289,6 +324,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarCameraOverlay: {
     position: 'absolute',
     bottom: 0,

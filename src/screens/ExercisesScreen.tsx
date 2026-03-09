@@ -6,6 +6,7 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   useWindowDimensions,
   Modal,
 } from 'react-native';
@@ -139,17 +140,17 @@ export default function ExercisesScreen() {
           />
         </View>
 
-        <FlatList
+        <ScrollView
           horizontal
-          data={CATEGORIES}
-          keyExtractor={(item) => item.key}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[styles.categoryList, { paddingHorizontal: isLarge ? 20 : 16 }]}
-          renderItem={({ item }) => (
+        >
+          {CATEGORIES.map((item) => (
             <TouchableOpacity
+              key={item.key}
               style={[
                 styles.categoryChip,
-                { backgroundColor: colors.chipBg, borderColor: colors.border, minHeight: isLarge ? 40 : 36 },
+                { backgroundColor: colors.chipBg, borderColor: colors.border, height: isLarge ? 40 : 36 },
                 selectedCategory === item.key && styles.categoryChipActive,
               ]}
               onPress={() => setSelectedCategory(item.key)}
@@ -164,8 +165,8 @@ export default function ExercisesScreen() {
                 {item.label}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </ScrollView>
       </View>
 
       {/* Exercise list */}
@@ -515,11 +516,11 @@ const styles = StyleSheet.create({
   categoryList: { paddingBottom: 10, gap: 8 },
   categoryChip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   categoryChipActive: { backgroundColor: '#4F8EF7', borderColor: '#4F8EF7' },
   categoryChipText: { fontSize: 13, fontWeight: '500', lineHeight: 18 },

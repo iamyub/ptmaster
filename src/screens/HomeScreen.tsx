@@ -9,6 +9,7 @@ import {
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +22,13 @@ import { loadRoutines } from '../storage/routineStorage';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
+
+const GREETINGS = [
+  '운동의 절반은 현관문을 열고 나가는 것',
+  '운동 안하면 빨리 늙는다',
+  '오늘 운동 많이 된다. 잠 잘올꺼야',
+  '운동은 하루를 짧게 하지만, 인생을 길게 만든다.',
+];
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -133,8 +141,11 @@ export default function HomeScreen() {
   const { activeWorkout } = useWorkout();
   const navigation = useNavigation<Nav>();
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
+  const [totalWorkouts, setTotalWorkouts] = useState(0);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
 
   const isLarge = width >= 600;
   const isMedium = width >= 400;
@@ -143,7 +154,10 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadWorkouts().then((all) => setRecentWorkouts(all.slice(0, isLarge ? 6 : 3)));
+      loadWorkouts().then((all) => {
+        setTotalWorkouts(all.length);
+        setRecentWorkouts(all.slice(0, 5));
+      });
       loadRoutines().then(setRoutines);
     }, [isLarge]),
   );
@@ -160,6 +174,7 @@ export default function HomeScreen() {
           try {
             await deleteWorkout(id);
             setRecentWorkouts((prev) => prev.filter((w) => w.id !== id));
+            setTotalWorkouts((prev) => prev - 1);
           } catch {
             showAlert('오류', '운동 기록 삭제에 실패했습니다.');
           }
@@ -196,7 +211,7 @@ export default function HomeScreen() {
 
     try {
       await addWorkout(newWorkout);
-      navigation.navigate('WorkoutDetail', { workoutId: newWorkout.id });
+      navigation.navigate('WorkoutDetail', { workoutId: newWorkout.id, autoStart: true });
     } catch {
       showAlert('오류', '운동 시작에 실패했습니다. 다시 시도해주세요.');
     }
@@ -267,11 +282,11 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { padding: hPad, paddingBottom: 40 + extraBottomPad }]}
+      contentContainerStyle={[styles.content, { padding: hPad, paddingTop: insets.top + 16, paddingBottom: 40 + extraBottomPad }]}
     >
       <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.text, fontSize: isLarge ? 30 : 26 }]}>
-          안녕하세요!
+        <Text style={[styles.greeting, { color: colors.text, fontSize: isLarge ? 26 : 22 }]}>
+          {greeting}
         </Text>
         <Text style={[styles.date, { color: colors.textSub, fontSize: isLarge ? 15 : 14 }]}>
           {today}
@@ -372,10 +387,20 @@ export default function HomeScreen() {
 
       {/* 최근 운동 섹션 */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18 }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18, marginBottom: 14 }]}>
           최근 운동
         </Text>
         {renderRecentWorkouts()}
+        {totalWorkouts > 5 && (
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() => (navigation as any).navigate('History')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.moreButtonText, { color: colors.primary }]}>더보기</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -385,7 +410,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingBottom: 40 },
   header: { marginBottom: 24 },
-  greeting: { fontSize: 26, fontWeight: '700' },
+  greeting: { fontSize: 26, fontWeight: '800', lineHeight: 34 },
   date: { fontSize: 14, marginTop: 4 },
   startButton: {
     flexDirection: 'row',
@@ -502,6 +527,16 @@ const styles = StyleSheet.create({
   workoutMeta: { fontSize: 13, marginTop: 4 },
   workoutCardRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   workoutExerciseCount: { fontSize: 13, color: '#4F8EF7', fontWeight: '600' },
+
+  moreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  moreButtonText: { fontSize: 14, fontWeight: '600' },
 
   // Large screen 2-col grid
   gridRow: { flexDirection: 'row', marginBottom: 10 },

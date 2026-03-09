@@ -7,6 +7,7 @@ export interface UserProfile {
   gender: 'male' | 'female' | null;
   height: string; // cm (string for input convenience)
   weight: string; // kg (string for input convenience)
+  photoUri?: string; // base64 data URI or file URI
 }
 
 export const DEFAULT_PROFILE: UserProfile = {

@@ -39,9 +39,9 @@ const ALARM_TYPE_OPTIONS: { key: AlarmType; label: string; icon: string }[] = [
 ];
 
 const VIBRATION_PATTERN_OPTIONS: { key: VibrationPattern; label: string; desc: string }[] = [
-  { key: 'short', label: '짧게', desc: '200ms 단발' },
-  { key: 'medium', label: '보통', desc: '1000ms 단발' },
-  { key: 'long', label: '길게', desc: '1800ms 단발' },
+  { key: 'once',   label: '1번', desc: '1회 진동' },
+  { key: 'twice',  label: '2번', desc: '2회 진동' },
+  { key: 'thrice', label: '3번', desc: '3회 진동' },
 ];
 
 const SOUND_TYPE_OPTIONS: { key: SoundType; label: string; desc: string }[] = [
@@ -218,15 +218,32 @@ function ExerciseRestSlider({
   );
 }
 
+const HOUR_CHIP_WIDTH = 58; // paddingH(20) + minWidth(52) + marginRight(6) ≈ actual rendered width
+
 // ── 메인 화면 ────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, settings: themeSettings, updateSettings: updateTheme } = useTheme();
+
+  const dayScrollRef = useRef<ScrollView>(null);
+  const nightScrollRef = useRef<ScrollView>(null);
 
   const [restTime, setRestTime] = useState(90);
   const [alarmSettings, setAlarmSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const [isExRestExpanded, setIsExRestExpanded] = useState(false);
+
+  // 자동 모드 시간 피커 초기 스크롤 위치 설정
+  useEffect(() => {
+    if (themeSettings.mode === 'auto') {
+      const dayOffset = Math.max(0, themeSettings.dayStartHour * HOUR_CHIP_WIDTH - 40);
+      const nightOffset = Math.max(0, themeSettings.nightStartHour * HOUR_CHIP_WIDTH - 40);
+      setTimeout(() => {
+        dayScrollRef.current?.scrollTo({ x: dayOffset, animated: false });
+        nightScrollRef.current?.scrollTo({ x: nightOffset, animated: false });
+      }, 100);
+    }
+  }, [themeSettings.mode, themeSettings.dayStartHour, themeSettings.nightStartHour]);
 
   useFocusEffect(
     useCallback(() => {
@@ -332,7 +349,7 @@ export default function SettingsScreen() {
             <View style={styles.timeRow}>
               <Ionicons name="sunny" size={16} color="#F5A623" />
               <Text style={[styles.timeLabel, { color: c.text }]}>주간 시작</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
+              <ScrollView ref={dayScrollRef} horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
                 {HOUR_OPTIONS.map((h) => {
                   const active = themeSettings.dayStartHour === h;
                   return (
@@ -352,7 +369,7 @@ export default function SettingsScreen() {
             <View style={styles.timeRow}>
               <Ionicons name="moon" size={16} color="#7B6CF6" />
               <Text style={[styles.timeLabel, { color: c.text }]}>야간 시작</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
+              <ScrollView ref={nightScrollRef} horizontal showsHorizontalScrollIndicator={false} style={styles.hourScroll}>
                 {HOUR_OPTIONS.map((h) => {
                   const active = themeSettings.nightStartHour === h;
                   return (

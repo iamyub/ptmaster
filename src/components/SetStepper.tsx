@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 
 interface Props {
@@ -12,8 +13,14 @@ interface Props {
 /** 무게/횟수 조절용 스테퍼: [−] [숫자입력] [+] */
 export default function SetStepper({ value, onChange, step, min = 0 }: Props) {
   const { isDark } = useTheme();
-  const decrease = () => onChange(Math.max(min, value - step));
-  const increase = () => onChange(value + step);
+  const decrease = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange(Math.max(min, value - step));
+  };
+  const increase = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange(value + step);
+  };
 
   const stepperBg = isDark ? '#252540' : '#F0F2F5';
   const btnBg = isDark ? '#2E2E50' : '#E2E5EA';
