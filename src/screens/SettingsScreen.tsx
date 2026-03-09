@@ -98,6 +98,7 @@ export default function SettingsScreen() {
   const [alarmSettings, setAlarmSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
+  const [isExRestExpanded, setIsExRestExpanded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -272,7 +273,21 @@ export default function SettingsScreen() {
 
         <Divider color={c.border} />
 
-        <RowLabel icon="barbell-outline" title="운동별 개별 휴식 시간" desc="운동마다 다른 휴식시간을 설정할 수 있어요" color={c.text} subColor={c.textSub} />
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => setIsExRestExpanded((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <RowLabel icon="barbell-outline" title="운동별 개별 휴식 시간" desc="운동마다 다른 휴식시간을 설정할 수 있어요" color={c.text} subColor={c.textSub} />
+          <Ionicons
+            name={isExRestExpanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={c.textMuted}
+            style={styles.collapsibleArrow}
+          />
+        </TouchableOpacity>
+
+        {isExRestExpanded && (
         <View style={styles.exerciseRestList}>
           {DEFAULT_EXERCISES.map((ex) => {
             const customTime = exerciseRestTimes[ex.id];
@@ -316,6 +331,7 @@ export default function SettingsScreen() {
             );
           })}
         </View>
+        )}
       </View>
 
       {/* ════ 알림 설정 ════ */}
@@ -462,6 +478,10 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, fontSize: 11, color: '#886600', lineHeight: 16 },
 
   patternDesc: { fontSize: 11, marginTop: 2 },
+
+  // 접힘/펼침
+  collapsibleHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  collapsibleArrow: { marginTop: 2, marginLeft: 4 },
 
   // 운동별 휴식시간
   exerciseRestList: { gap: 2 },

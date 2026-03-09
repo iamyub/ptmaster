@@ -41,7 +41,7 @@ function formatTime(seconds: number): string {
 const TIMER_BAR_HEIGHT = 118;
 
 export default function WorkoutDetailScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<Route>();
   const { workoutId } = route.params;
@@ -411,11 +411,13 @@ export default function WorkoutDetailScreen() {
                     style={[
                       styles.cellComplete,
                       styles.checkBtn,
-                      s.completed && styles.checkBtnDone,
+                      s.completed
+                        ? styles.checkBtnDone
+                        : { backgroundColor: isDark ? '#3A3A58' : '#E8E8E8' },
                     ]}
                     onPress={() => toggleCompleted(ex.id, s.id, s.completed, ex.exercise.id)}
                   >
-                    <Ionicons name="checkmark" size={16} color={s.completed ? '#fff' : '#bbb'} />
+                    <Ionicons name="checkmark" size={16} color={s.completed ? '#fff' : (isDark ? '#7070A0' : '#bbb')} />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -608,7 +610,6 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
   },
