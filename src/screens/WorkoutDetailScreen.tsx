@@ -226,11 +226,15 @@ export default function WorkoutDetailScreen() {
     updateExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exId) return ex;
+        const setIdx = ex.sets.findIndex((s) => s.id === setId);
         return {
           ...ex,
-          sets: ex.sets.map((s) =>
-            s.id === setId ? { ...s, [field]: Math.max(0, value) } : s,
-          ),
+          sets: ex.sets.map((s, idx) => {
+            if (s.id === setId) return { ...s, [field]: Math.max(0, value) };
+            // 이후 세트 중 빈칸(0)인 경우만 자동 채우기
+            if (idx > setIdx && s[field] === 0) return { ...s, [field]: Math.max(0, value) };
+            return s;
+          }),
         };
       }),
     );
@@ -321,6 +325,26 @@ export default function WorkoutDetailScreen() {
           } catch {
             showAlert('오류', '운동 기록 삭제에 실패했습니다.');
           }
+        },
+      },
+    ]);
+  };
+
+  const handleEndWorkout = () => {
+    showAlert('운동 종료', '운동을 종료하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '확인',
+        onPress: async () => {
+          if (workout) {
+            try {
+              await updateWorkout({ ...workout, exercises: editedExercises });
+            } catch {
+              // silent fail
+            }
+          }
+          endWorkout();
+          (navigation as any).navigate('MainTabs');
         },
       },
     ]);
@@ -561,6 +585,11 @@ export default function WorkoutDetailScreen() {
               </TouchableOpacity>
             )}
 
+            <TouchableOpacity style={styles.endWorkoutButton} onPress={handleEndWorkout}>
+              <Ionicons name="stop-circle-outline" size={18} color="#fff" />
+              <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
               onPress={handleDelete}
@@ -627,6 +656,11 @@ export default function WorkoutDetailScreen() {
             <Text style={styles.saveButtonText}>변경사항 저장</Text>
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity style={styles.endWorkoutButton} onPress={handleEndWorkout}>
+          <Ionicons name="stop-circle-outline" size={18} color="#fff" />
+          <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
@@ -1035,6 +1069,23 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   saveButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
+
+  endWorkoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FF8C00',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    shadowColor: '#FF8C00',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  endWorkoutButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
 
   deleteButton: {
     flexDirection: 'row',

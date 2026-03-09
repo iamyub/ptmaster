@@ -15,9 +15,9 @@ import { AlarmSettings, VibrationPattern, SoundType } from '../storage/settingsS
 // medium: 400ms 3회, 간격 300ms
 // long:   800ms 3회, 간격 400ms
 const VIBRATION_PATTERNS: Record<VibrationPattern, number[]> = {
-  short:  [0, 200],
-  medium: [0, 400, 300, 400, 300, 400],
-  long:   [0, 800, 400, 800, 400, 800],
+  short:  [200],
+  medium: [1000],
+  long:   [1800],
 };
 
 // 소리 타입별 대체 진동 패턴
@@ -27,7 +27,7 @@ const SOUND_VIBRATION_SUBS: Record<SoundType, number[]> = {
   chime: [0, 100, 60, 150, 60, 250, 60, 500], // 점층적
 };
 
-function vibrate(pattern: number[]) {
+function vibrate(pattern: number | number[]) {
   if (Platform.OS === 'web') return; // 웹에서는 진동 무시
   if (Platform.OS === 'ios') {
     // iOS는 패턴 진동 미지원 → 단발로 대체

@@ -302,7 +302,7 @@ function AppInner() {
             <Stack.Screen
               name="WorkoutDetail"
               component={WorkoutDetailScreen}
-              options={{ title: '운동 상세' }}
+              options={{ title: '운동 상세', headerBackTitle: '메인 화면' }}
             />
             <Stack.Screen
               name="ManageRoutines"

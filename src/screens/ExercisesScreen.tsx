@@ -110,7 +110,7 @@ export default function ExercisesScreen() {
             <TouchableOpacity
               style={[
                 styles.categoryChip,
-                { backgroundColor: colors.chipBg, borderColor: colors.border, height: isLarge ? 40 : 36 },
+                { backgroundColor: colors.chipBg, borderColor: colors.border, minHeight: isLarge ? 40 : 36 },
                 selectedCategory === item.key && styles.categoryChipActive,
               ]}
               onPress={() => setSelectedCategory(item.key)}
@@ -274,6 +274,7 @@ const styles = StyleSheet.create({
   categoryList: { paddingBottom: 10, gap: 8 },
   categoryChip: {
     paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',

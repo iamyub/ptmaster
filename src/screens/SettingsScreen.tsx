@@ -38,9 +38,9 @@ const ALARM_TYPE_OPTIONS: { key: AlarmType; label: string; icon: string }[] = [
 ];
 
 const VIBRATION_PATTERN_OPTIONS: { key: VibrationPattern; label: string; desc: string }[] = [
-  { key: 'short', label: '짧게', desc: '200ms 단발 진동' },
-  { key: 'medium', label: '보통', desc: '400ms × 3회 (간격 300ms)' },
-  { key: 'long', label: '길게', desc: '800ms × 3회 (간격 400ms)' },
+  { key: 'short', label: '짧게', desc: '200ms 단발' },
+  { key: 'medium', label: '보통', desc: '1000ms 단발' },
+  { key: 'long', label: '길게', desc: '1800ms 단발' },
 ];
 
 const SOUND_TYPE_OPTIONS: { key: SoundType; label: string; desc: string }[] = [
@@ -94,7 +94,7 @@ function Divider({ color }: { color: string }) {
 }
 
 // ── 드럼롤 피커 ──────────────────────────────────────────────
-const PICKER_ITEM_H = 56;
+const PICKER_ITEM_H = 34;
 
 function DrumRollPicker({
   value,
@@ -721,31 +721,31 @@ const styles = StyleSheet.create({
 
   // 드럼롤 피커
   pickerContainer: {
-    height: 56 * 3,
+    height: 34 * 3,
     overflow: 'hidden',
     marginVertical: 8,
   },
   pickerHighlight: {
     position: 'absolute',
-    top: 56,
+    top: 34,
     left: 0,
     right: 0,
-    height: 56,
+    height: 34,
     borderTopWidth: 1.5,
     borderBottomWidth: 1.5,
     zIndex: 1,
   },
   pickerItem: {
-    height: 56,
+    height: 34,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pickerItemText: {
-    fontSize: 20,
+    fontSize: 12,
     fontWeight: '400',
   },
   pickerItemTextSelected: {
-    fontSize: 34,
+    fontSize: 20,
     fontWeight: '800',
   },
 
