@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import { loadRoutines, addRoutine, updateRoutine, deleteRoutine } from '../stora
 import { DEFAULT_EXERCISES, CATEGORY_LABELS } from '../utils/exercises';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
+import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
 
 type Route = RouteProp<RootStackParamList, 'ManageRoutines'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -30,7 +32,7 @@ function generateId() {
 
 type FormMode = 'add' | 'edit';
 
-// ── 운동 선택 모달 ──────────────────────────────────────────
+// ── Exercise picker modal (for small screens) ─────────────────
 function ExercisePickerModal({
   visible,
   alreadySelected,
@@ -51,7 +53,6 @@ function ExercisePickerModal({
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(10);
 
-  // 모달 닫힐 때 상태 초기화
   useEffect(() => {
     if (!visible) {
       setStep('list');
@@ -87,12 +88,8 @@ function ExercisePickerModal({
 
   const handleConfirmAdd = () => {
     if (!pickedExercise) return;
-    const sets: RoutineSet[] = Array.from({ length: setCount }, () => ({
-      weight,
-      reps,
-    }));
+    const sets: RoutineSet[] = Array.from({ length: setCount }, () => ({ weight, reps }));
     onAdd(pickedExercise.id, sets);
-    // 상태 리셋
     setStep('list');
     setPickedExercise(null);
     setSearch('');
@@ -119,7 +116,6 @@ function ExercisePickerModal({
         style={[mStyles.modalContainer, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* 헤더 */}
         <View style={[mStyles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           {step === 'config' ? (
             <TouchableOpacity onPress={() => setStep('list')} style={mStyles.modalBackBtn}>
@@ -138,7 +134,6 @@ function ExercisePickerModal({
 
         {step === 'list' ? (
           <>
-            {/* 검색 */}
             <View style={[mStyles.searchBar, { backgroundColor: colors.card }]}>
               <Ionicons name="search-outline" size={18} color={colors.textMuted} />
               <TextInput
@@ -156,7 +151,6 @@ function ExercisePickerModal({
               )}
             </View>
 
-            {/* 카테고리 필터 */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -168,10 +162,7 @@ function ExercisePickerModal({
                 return (
                   <TouchableOpacity
                     key={cat.key}
-                    style={[
-                      mStyles.categoryChip,
-                      { backgroundColor: active ? colors.primary : colors.chipBg },
-                    ]}
+                    style={[mStyles.categoryChip, { backgroundColor: active ? colors.primary : colors.chipBg }]}
                     onPress={() => setActiveCategory(cat.key)}
                   >
                     <Text style={[mStyles.categoryChipText, { color: active ? '#fff' : colors.textSub }]}>
@@ -182,7 +173,6 @@ function ExercisePickerModal({
               })}
             </ScrollView>
 
-            {/* 운동 목록 */}
             <FlatList
               data={filtered}
               keyExtractor={(e) => e.id}
@@ -223,7 +213,6 @@ function ExercisePickerModal({
             />
           </>
         ) : (
-          /* 기본값 설정 단계 */
           <ScrollView contentContainerStyle={mStyles.configContent}>
             <View style={[mStyles.configExerciseHeader, { backgroundColor: colors.card }]}>
               <Text style={[mStyles.configExerciseName, { color: colors.text }]}>{pickedExercise?.name}</Text>
@@ -233,7 +222,6 @@ function ExercisePickerModal({
             </View>
 
             <View style={[mStyles.configCard, { backgroundColor: colors.card }]}>
-              {/* 세트 수 */}
               <View style={mStyles.configRow}>
                 <Text style={[mStyles.configLabel, { color: colors.text }]}>세트 수</Text>
                 <View style={[mStyles.configStepper, { backgroundColor: colors.chipBg }]}>
@@ -253,7 +241,6 @@ function ExercisePickerModal({
                 </View>
               </View>
 
-              {/* 기본 무게 */}
               <View style={mStyles.configRow}>
                 <Text style={[mStyles.configLabel, { color: colors.text }]}>기본 무게 (kg)</Text>
                 <View style={mStyles.configStepperWide}>
@@ -261,7 +248,6 @@ function ExercisePickerModal({
                 </View>
               </View>
 
-              {/* 기본 횟수 */}
               <View style={mStyles.configRow}>
                 <Text style={[mStyles.configLabel, { color: colors.text }]}>기본 횟수</Text>
                 <View style={mStyles.configStepperWide}>
@@ -270,7 +256,6 @@ function ExercisePickerModal({
               </View>
             </View>
 
-            {/* 미리보기 */}
             <View style={[mStyles.previewCard, { backgroundColor: colors.primaryBg }]}>
               <Text style={[mStyles.previewTitle, { color: colors.primary }]}>추가될 세트 미리보기</Text>
               {Array.from({ length: setCount }, (_, i) => (
@@ -294,13 +279,151 @@ function ExercisePickerModal({
   );
 }
 
-// ── 메인 화면 ───────────────────────────────────────────────
+// ── Inline exercise picker panel (for large screens) ──────────
+function InlineExercisePicker({
+  alreadySelected,
+  onAdd,
+  colors,
+}: {
+  alreadySelected: string[];
+  onAdd: (exerciseId: string) => void;
+  colors: any;
+}) {
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<ExerciseCategory | 'all'>('all');
+
+  const categories: Array<{ key: ExerciseCategory | 'all'; label: string }> = [
+    { key: 'all', label: '전체' },
+    ...Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ key: k as ExerciseCategory, label: v })),
+  ];
+
+  const filtered = DEFAULT_EXERCISES.filter((e) => {
+    const matchSearch = e.name.includes(search.trim());
+    const matchCategory = activeCategory === 'all' || e.category === activeCategory;
+    return matchSearch && matchCategory;
+  });
+
+  return (
+    <View style={[inlineStyles.container, { backgroundColor: colors.background, borderRightColor: colors.border }]}>
+      <Text style={[inlineStyles.panelTitle, { color: colors.textSub }]}>운동 추가</Text>
+
+      <View style={[inlineStyles.searchBar, { backgroundColor: colors.card }]}>
+        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+        <TextInput
+          style={[inlineStyles.searchInput, { color: colors.text }]}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="운동 검색"
+          placeholderTextColor={colors.textMuted}
+        />
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 44 }}>
+        <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 6 }}>
+          {categories.map((cat) => {
+            const active = activeCategory === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[inlineStyles.chip, { backgroundColor: active ? colors.primary : colors.chipBg }]}
+                onPress={() => setActiveCategory(cat.key)}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '500', color: active ? '#fff' : colors.textSub }}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      <FlatList
+        data={filtered}
+        keyExtractor={(e) => e.id}
+        contentContainerStyle={{ padding: 12 }}
+        renderItem={({ item }) => {
+          const isAlready = alreadySelected.includes(item.id);
+          return (
+            <TouchableOpacity
+              style={[
+                inlineStyles.exerciseRow,
+                { backgroundColor: colors.card, opacity: isAlready ? 0.5 : 1 },
+              ]}
+              onPress={() => !isAlready && onAdd(item.id)}
+              activeOpacity={isAlready ? 1 : 0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{item.name}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSub, marginTop: 2 }}>
+                  {item.muscleGroups.join(' · ')}
+                </Text>
+              </View>
+              {isAlready ? (
+                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+              ) : (
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={
+          <Text style={{ textAlign: 'center', color: colors.textMuted, paddingVertical: 20, fontSize: 13 }}>
+            검색 결과가 없어요.
+          </Text>
+        }
+      />
+    </View>
+  );
+}
+
+const inlineStyles = StyleSheet.create({
+  container: {
+    width: 300,
+    borderRightWidth: 1,
+    paddingTop: 12,
+  },
+  panelTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    margin: 12,
+    marginTop: 0,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14 },
+  chip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+});
+
+// ── Main screen ───────────────────────────────────────────────
 export default function ManageRoutinesScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { colors } = useTheme();
+  const { activeWorkout } = useWorkout();
   const paramRoutineId = route.params?.routineId;
   const paramOpenForm = route.params?.openForm;
+
+  const { width } = useWindowDimensions();
+  const isLarge = width >= 600;
+  const extraBottomPad = activeWorkout ? MINI_BAR_HEIGHT : 0;
 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
@@ -309,7 +432,6 @@ export default function ManageRoutinesScreen() {
   const [formExercises, setFormExercises] = useState<RoutineExercise[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  // ── 헤더 제목 동적 변경 ──
   useLayoutEffect(() => {
     if (formMode === 'edit' && editingRoutine) {
       navigation.setOptions({ title: editingRoutine.name });
@@ -349,10 +471,9 @@ export default function ManageRoutinesScreen() {
   const openEditForm = (routine: Routine) => {
     setEditingRoutine(routine);
     setRoutineName(routine.name);
-    setFormExercises(routine.exercises.map((re) => ({
-      ...re,
-      sets: re.sets.map((s) => ({ ...s })),
-    })));
+    setFormExercises(
+      routine.exercises.map((re) => ({ ...re, sets: re.sets.map((s) => ({ ...s })) })),
+    );
     setFormMode('edit');
   };
 
@@ -363,10 +484,16 @@ export default function ManageRoutinesScreen() {
     setFormExercises([]);
   };
 
-  // 모달에서 운동 추가 (weight/reps/sets 포함)
   const handleAddExercise = (exerciseId: string, sets: RoutineSet[]) => {
     setFormExercises((prev) => [...prev, { exerciseId, sets }]);
     setPickerVisible(false);
+  };
+
+  // For inline picker: add with defaults (3 sets, 0kg, 10 reps)
+  const handleAddExerciseInline = (exerciseId: string) => {
+    if (formExercises.some((re) => re.exerciseId === exerciseId)) return;
+    const sets: RoutineSet[] = Array.from({ length: 3 }, () => ({ weight: 0, reps: 10 }));
+    setFormExercises((prev) => [...prev, { exerciseId, sets }]);
   };
 
   const removeExercise = (exerciseId: string) => {
@@ -392,7 +519,12 @@ export default function ManageRoutinesScreen() {
     );
   };
 
-  const updateFormSet = (exerciseId: string, setIdx: number, field: keyof RoutineSet, value: number) => {
+  const updateFormSet = (
+    exerciseId: string,
+    setIdx: number,
+    field: keyof RoutineSet,
+    value: number,
+  ) => {
     setFormExercises((prev) =>
       prev.map((re) => {
         if (re.exerciseId !== exerciseId) return re;
@@ -465,150 +597,185 @@ export default function ManageRoutinesScreen() {
 
   const alreadySelectedIds = formExercises.map((re) => re.exerciseId);
 
-  // ── 편집/추가 폼 화면 ──────────────────────────────────────
+  // ── Form content (shared between layouts) ──
+  const renderFormContent = () => (
+    <>
+      {/* Routine name */}
+      <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.formLabel, { color: colors.textSub }]}>루틴 이름</Text>
+        <TextInput
+          style={[styles.nameInput, { backgroundColor: colors.inputBg, color: colors.text }]}
+          value={routineName}
+          onChangeText={setRoutineName}
+          placeholder="루틴 이름 (예: 가슴·어깨 데이)"
+          placeholderTextColor={colors.textMuted}
+          autoFocus={formMode === 'add'}
+        />
+      </View>
+
+      <Text style={[styles.exercisesSectionLabel, { color: colors.textSub }]}>
+        추가된 운동{formExercises.length > 0 ? ` (${formExercises.length}종목)` : ''}
+      </Text>
+
+      {sortedFormExercises.length === 0 ? (
+        <View style={[styles.noExerciseBox, { backgroundColor: colors.cardAlt }]}>
+          <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
+          <Text style={[styles.noExerciseText, { color: colors.textMuted }]}>
+            아직 추가된 운동이 없어요.
+          </Text>
+          <Text style={[styles.noExerciseSubText, { color: colors.textMuted }]}>
+            {isLarge ? '왼쪽 패널에서 운동을 선택하세요.' : '아래 버튼으로 운동을 추가해보세요.'}
+          </Text>
+        </View>
+      ) : (
+        sortedFormExercises.map((re) => {
+          const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
+          if (!exercise) return null;
+          return (
+            <View
+              key={re.exerciseId}
+              style={[
+                styles.formExerciseBlock,
+                { backgroundColor: colors.cardAlt, borderLeftColor: colors.primary },
+              ]}
+            >
+              <View style={styles.formExerciseHeader}>
+                <View style={styles.formExerciseInfo}>
+                  <Text style={[styles.formExerciseName, { color: colors.text }]}>
+                    {exercise.name}
+                  </Text>
+                  <Text style={[styles.formExerciseMuscle, { color: colors.textSub }]}>
+                    {exercise.muscleGroups.join(' · ')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => removeExercise(re.exerciseId)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.setEditor}>
+                <View style={styles.setEditorHeader}>
+                  <Text style={[styles.setEditorHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                  <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
+                  <View style={{ width: 8 }} />
+                  <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
+                  <View style={{ width: 28 }} />
+                </View>
+
+                {re.sets.map((s, setIdx) => (
+                  <View key={setIdx} style={styles.setEditorRow}>
+                    <Text style={[styles.setEditorNum, { color: colors.textSub }]}>{setIdx + 1}</Text>
+                    <SetStepper
+                      value={s.weight}
+                      onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'weight', v)}
+                      step={5}
+                    />
+                    <View style={{ width: 8 }} />
+                    <SetStepper
+                      value={s.reps}
+                      onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'reps', v)}
+                      step={1}
+                      min={1}
+                    />
+                    <TouchableOpacity
+                      style={styles.setEditorDeleteBtn}
+                      onPress={() => removeFormSet(re.exerciseId, setIdx)}
+                      disabled={re.sets.length <= 1}
+                    >
+                      <Ionicons
+                        name="remove-circle-outline"
+                        size={18}
+                        color={re.sets.length <= 1 ? colors.textMuted : colors.destructive}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity style={styles.addSetBtn} onPress={() => addFormSet(re.exerciseId)}>
+                  <Ionicons name="add" size={14} color={colors.primary} />
+                  <Text style={[styles.addSetText, { color: colors.primary }]}>세트 추가</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })
+      )}
+
+      {/* Add exercise button (small screens only) */}
+      {!isLarge && (
+        <TouchableOpacity
+          style={[styles.addExerciseBtn, { borderColor: colors.primary }]}
+          onPress={() => setPickerVisible(true)}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+          <Text style={[styles.addExerciseBtnText, { color: colors.primary }]}>운동 추가 +</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Delete button (edit mode) */}
+      {formMode === 'edit' && editingRoutine && (
+        <TouchableOpacity
+          style={[styles.deleteRoutineBtn, { backgroundColor: colors.destructiveBg }]}
+          onPress={() => handleDelete(editingRoutine.id, editingRoutine.name)}
+        >
+          <Ionicons name="trash-outline" size={17} color={colors.destructive} />
+          <Text style={[styles.deleteRoutineBtnText, { color: colors.destructive }]}>루틴 삭제</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Save/cancel */}
+      <View style={styles.formBtns}>
+        <TouchableOpacity
+          style={[styles.cancelBtn, { backgroundColor: colors.chipBg }]}
+          onPress={() => { closeForm(); navigation.goBack(); }}
+        >
+          <Text style={[styles.cancelBtnText, { color: colors.textSub }]}>취소</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.confirmBtn} onPress={handleSave}>
+          <Text style={styles.confirmBtnText}>저장</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
+  // ── Form view ──
   if (formMode !== null) {
+    if (isLarge) {
+      // 2-column layout: left = exercise picker, right = routine composition
+      return (
+        <View style={[styles.container, { backgroundColor: colors.background, flexDirection: 'row' }]}>
+          <InlineExercisePicker
+            alreadySelected={alreadySelectedIds}
+            onAdd={handleAddExerciseInline}
+            colors={colors}
+          />
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[
+              styles.formScrollContent,
+              { paddingBottom: 40 + extraBottomPad },
+            ]}
+          >
+            {renderFormContent()}
+          </ScrollView>
+        </View>
+      );
+    }
+
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView contentContainerStyle={styles.formScrollContent}>
-          {/* 루틴 이름 입력 */}
-          <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.formLabel, { color: colors.textSub }]}>루틴 이름</Text>
-            <TextInput
-              style={[styles.nameInput, { backgroundColor: colors.inputBg, color: colors.text }]}
-              value={routineName}
-              onChangeText={setRoutineName}
-              placeholder="루틴 이름 (예: 가슴·어깨 데이)"
-              placeholderTextColor={colors.textMuted}
-              autoFocus={formMode === 'add'}
-            />
-          </View>
-
-          {/* 추가된 운동 목록 */}
-          <Text style={[styles.exercisesSectionLabel, { color: colors.textSub }]}>
-            추가된 운동{formExercises.length > 0 ? ` (${formExercises.length}종목)` : ''}
-          </Text>
-
-          {sortedFormExercises.length === 0 ? (
-            <View style={[styles.noExerciseBox, { backgroundColor: colors.cardAlt }]}>
-              <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
-              <Text style={[styles.noExerciseText, { color: colors.textMuted }]}>아직 추가된 운동이 없어요.</Text>
-              <Text style={[styles.noExerciseSubText, { color: colors.textMuted }]}>아래 버튼으로 운동을 추가해보세요.</Text>
-            </View>
-          ) : (
-            sortedFormExercises.map((re) => {
-              const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
-              if (!exercise) return null;
-              return (
-                <View
-                  key={re.exerciseId}
-                  style={[
-                    styles.formExerciseBlock,
-                    { backgroundColor: colors.cardAlt, borderLeftColor: colors.primary },
-                  ]}
-                >
-                  {/* 운동 헤더 */}
-                  <View style={styles.formExerciseHeader}>
-                    <View style={styles.formExerciseInfo}>
-                      <Text style={[styles.formExerciseName, { color: colors.text }]}>{exercise.name}</Text>
-                      <Text style={[styles.formExerciseMuscle, { color: colors.textSub }]}>
-                        {exercise.muscleGroups.join(' · ')}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => removeExercise(re.exerciseId)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* 세트 편집기 */}
-                  <View style={styles.setEditor}>
-                    <View style={styles.setEditorHeader}>
-                      <Text style={[styles.setEditorHeaderNum, { color: colors.textMuted }]}>세트</Text>
-                      <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
-                      <View style={{ width: 8 }} />
-                      <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
-                      <View style={{ width: 28 }} />
-                    </View>
-
-                    {re.sets.map((s, setIdx) => (
-                      <View key={setIdx} style={styles.setEditorRow}>
-                        <Text style={[styles.setEditorNum, { color: colors.textSub }]}>{setIdx + 1}</Text>
-                        <SetStepper
-                          value={s.weight}
-                          onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'weight', v)}
-                          step={5}
-                        />
-                        <View style={{ width: 8 }} />
-                        <SetStepper
-                          value={s.reps}
-                          onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'reps', v)}
-                          step={1}
-                          min={1}
-                        />
-                        <TouchableOpacity
-                          style={styles.setEditorDeleteBtn}
-                          onPress={() => removeFormSet(re.exerciseId, setIdx)}
-                          disabled={re.sets.length <= 1}
-                        >
-                          <Ionicons
-                            name="remove-circle-outline"
-                            size={18}
-                            color={re.sets.length <= 1 ? colors.textMuted : colors.destructive}
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-
-                    <TouchableOpacity
-                      style={styles.addSetBtn}
-                      onPress={() => addFormSet(re.exerciseId)}
-                    >
-                      <Ionicons name="add" size={14} color={colors.primary} />
-                      <Text style={[styles.addSetText, { color: colors.primary }]}>세트 추가</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
-          )}
-
-          {/* 운동 추가 버튼 */}
-          <TouchableOpacity
-            style={[styles.addExerciseBtn, { borderColor: colors.primary }]}
-            onPress={() => setPickerVisible(true)}
-          >
-            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-            <Text style={[styles.addExerciseBtnText, { color: colors.primary }]}>운동 추가 +</Text>
-          </TouchableOpacity>
-
-          {/* 삭제 버튼 (편집 모드) */}
-          {formMode === 'edit' && editingRoutine && (
-            <TouchableOpacity
-              style={[styles.deleteRoutineBtn, { backgroundColor: colors.destructiveBg }]}
-              onPress={() => handleDelete(editingRoutine.id, editingRoutine.name)}
-            >
-              <Ionicons name="trash-outline" size={17} color={colors.destructive} />
-              <Text style={[styles.deleteRoutineBtnText, { color: colors.destructive }]}>루틴 삭제</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* 저장/취소 */}
-          <View style={styles.formBtns}>
-            <TouchableOpacity
-              style={[styles.cancelBtn, { backgroundColor: colors.chipBg }]}
-              onPress={() => { closeForm(); navigation.goBack(); }}
-            >
-              <Text style={[styles.cancelBtnText, { color: colors.textSub }]}>취소</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleSave}>
-              <Text style={styles.confirmBtnText}>저장</Text>
-            </TouchableOpacity>
-          </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.formScrollContent,
+            { paddingBottom: 40 + extraBottomPad },
+          ]}
+        >
+          {renderFormContent()}
         </ScrollView>
 
-        {/* 운동 선택 모달 */}
         <ExercisePickerModal
           visible={pickerVisible}
           alreadySelected={alreadySelectedIds}
@@ -619,18 +786,26 @@ export default function ManageRoutinesScreen() {
     );
   }
 
-  // ── 루틴 목록 화면 ─────────────────────────────────────────
+  // ── Routine list ──
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={routines}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        numColumns={isLarge ? 2 : 1}
+        key={isLarge ? 'large' : 'small'}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 100 + extraBottomPad, padding: isLarge ? 20 : 16 },
+        ]}
+        columnWrapperStyle={isLarge ? { gap: 12 } : undefined}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Ionicons name="list-outline" size={48} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textSub }]}>저장된 루틴이 없어요.</Text>
-            <Text style={[styles.emptySubText, { color: colors.textMuted }]}>아래 버튼으로 루틴을 추가해보세요!</Text>
+            <Text style={[styles.emptySubText, { color: colors.textMuted }]}>
+              아래 버튼으로 루틴을 추가해보세요!
+            </Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -640,17 +815,21 @@ export default function ManageRoutinesScreen() {
             .join(', ');
           return (
             <TouchableOpacity
-              style={[styles.routineCard, { backgroundColor: colors.card }]}
+              style={[styles.routineCard, { backgroundColor: colors.card, flex: isLarge ? 1 : undefined }]}
               onLongPress={() => openEditForm(item)}
               activeOpacity={0.85}
               delayLongPress={400}
             >
               <View style={styles.routineLeft}>
-                <Text style={[styles.routineName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.routineName, { color: colors.text, fontSize: isLarge ? 17 : 16 }]}>
+                  {item.name}
+                </Text>
                 <Text style={[styles.routineExercises, { color: colors.textSub }]} numberOfLines={2}>
                   {exerciseNames}
                 </Text>
-                <Text style={[styles.routineCount, { color: colors.primary }]}>{item.exercises.length}종목</Text>
+                <Text style={[styles.routineCount, { color: colors.primary }]}>
+                  {item.exercises.length}종목
+                </Text>
               </View>
               <View style={styles.routineActions}>
                 <TouchableOpacity
@@ -673,7 +852,7 @@ export default function ManageRoutinesScreen() {
         }}
       />
 
-      <TouchableOpacity style={styles.addButton} onPress={openAddForm}>
+      <TouchableOpacity style={[styles.addButton, { bottom: 24 + extraBottomPad }]} onPress={openAddForm}>
         <Ionicons name="add" size={24} color="#fff" />
         <Text style={styles.addButtonText}>루틴 추가</Text>
       </TouchableOpacity>
@@ -681,11 +860,10 @@ export default function ManageRoutinesScreen() {
   );
 }
 
-// ── 스타일 ───────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // 루틴 목록
   listContent: { padding: 16, paddingBottom: 100 },
   emptyBox: { alignItems: 'center', paddingVertical: 60, gap: 10 },
   emptyText: { fontSize: 16 },
@@ -712,7 +890,6 @@ const styles = StyleSheet.create({
 
   addButton: {
     position: 'absolute',
-    bottom: 24,
     left: 16,
     right: 16,
     backgroundColor: '#4F8EF7',
@@ -730,7 +907,6 @@ const styles = StyleSheet.create({
   },
   addButtonText: { fontSize: 17, fontWeight: '700', color: '#fff' },
 
-  // 편집 폼
   formScrollContent: { padding: 16, paddingBottom: 40 },
 
   formCard: {
@@ -743,15 +919,23 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  formLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  nameInput: {
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
+  formLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
+  nameInput: { borderRadius: 10, padding: 12, fontSize: 16, fontWeight: '600' },
 
-  exercisesSectionLabel: { fontSize: 12, fontWeight: '700', marginBottom: 10, marginLeft: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  exercisesSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginLeft: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
 
   noExerciseBox: {
     alignItems: 'center',
@@ -824,11 +1008,16 @@ const styles = StyleSheet.create({
   formBtns: { flexDirection: 'row', gap: 10 },
   cancelBtn: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
   cancelBtnText: { fontSize: 15, fontWeight: '600' },
-  confirmBtn: { flex: 2, backgroundColor: '#4F8EF7', borderRadius: 12, padding: 14, alignItems: 'center' },
+  confirmBtn: {
+    flex: 2,
+    backgroundColor: '#4F8EF7',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
   confirmBtnText: { fontSize: 15, color: '#fff', fontWeight: '700' },
 });
 
-// ── 모달 스타일 ──────────────────────────────────────────────
 const mStyles = StyleSheet.create({
   modalContainer: { flex: 1 },
   modalHeader: {
@@ -860,7 +1049,12 @@ const mStyles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15 },
 
   categoryScroll: { maxHeight: 44 },
-  categoryScrollContent: { paddingHorizontal: 12, paddingBottom: 8, gap: 8, flexDirection: 'row' },
+  categoryScrollContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    gap: 8,
+    flexDirection: 'row',
+  },
   categoryChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   categoryChipText: { fontSize: 13, fontWeight: '500' },
 
