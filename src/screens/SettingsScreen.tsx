@@ -24,6 +24,7 @@ import {
 } from '../storage/settingsStorage';
 import { fireAlarm } from '../utils/alarmHelper';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
+import { formatSeconds } from '../utils/timeFormat';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 
 // ── 상수 ────────────────────────────────────────────────────

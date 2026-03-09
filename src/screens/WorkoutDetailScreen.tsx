@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   Modal,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet, Exercise } from '../types';
 import { EXERCISES } from '../utils/exercises';
 import { loadWorkouts, deleteWorkout, updateWorkout } from '../storage/workoutStorage';
@@ -28,11 +30,13 @@ import {
   CustomAlternatives,
   DEFAULT_ALARM_SETTINGS,
 } from '../storage/settingsStorage';
+import { formatSeconds } from '../utils/timeFormat';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout } from '../context/WorkoutContext';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutDetail'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function generateId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -44,25 +48,31 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function displayName(ex: Exercise): string {
+  return ex.description ? `${ex.name} - ${ex.description}` : ex.name;
+}
+
 const TIMER_BAR_HEIGHT = 110;
 
 export default function WorkoutDetailScreen() {
   const { colors, isDark } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { workoutId } = route.params;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // Responsive breakpoints
   const isLarge = width >= 600;
   const isMedium = width >= 400;
 
+  // ── State ──
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [editedExercises, setEditedExercises] = useState<WorkoutExercise[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [isWorkoutPaused, setIsWorkoutPaused] = useState(false);
   const [selectedExId, setSelectedExId] = useState<string | null>(null);
   const [changeTargetExId, setChangeTargetExId] = useState<string | null>(null);
+  const [showAddExModal, setShowAddExModal] = useState(false);
+  const [addExSearch, setAddExSearch] = useState('');
 
   // Settings
   const [defaultRestTime, setDefaultRestTime] = useState(90);
@@ -70,7 +80,17 @@ export default function WorkoutDetailScreen() {
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
   const [customAlternatives, setCustomAlternatives] = useState<CustomAlternatives>({});
 
-  // Workout context (timer lives here globally)
+  // ── Refs ──
+  const workoutRef = useRef<Workout | null>(null);
+  const isInitializedRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoFinishedRef = useRef(false);
+
+  useEffect(() => {
+    workoutRef.current = workout;
+  }, [workout]);
+
+  // ── Workout context ──
   const {
     timerActive,
     timerSeconds,
@@ -84,18 +104,22 @@ export default function WorkoutDetailScreen() {
     endWorkout,
   } = useWorkout();
 
-  // Load settings
+  // ── Load settings ──
   useEffect(() => {
-    Promise.all([loadRestTime(), loadAlarmSettings(), loadExerciseRestTimes(), loadCustomAlternatives()]).then(
-      ([restTime, alarm, exTimes, customAlts]) => {
-        setDefaultRestTime(restTime);
-        setAlarmSettings(alarm);
-        setExerciseRestTimes(exTimes);
-        setCustomAlternatives(customAlts);
-      },
-    );
+    Promise.all([
+      loadRestTime(),
+      loadAlarmSettings(),
+      loadExerciseRestTimes(),
+      loadCustomAlternatives(),
+    ]).then(([restTime, alarm, exTimes, customAlts]) => {
+      setDefaultRestTime(restTime);
+      setAlarmSettings(alarm);
+      setExerciseRestTimes(exTimes);
+      setCustomAlternatives(customAlts);
+    });
   }, []);
 
+  // ── Load workout ──
   useFocusEffect(
     useCallback(() => {
       loadWorkouts().then((all) => {
@@ -107,15 +131,36 @@ export default function WorkoutDetailScreen() {
             sets: ex.sets.map((s) => ({ ...s })),
           }));
           setEditedExercises(exs);
-          setHasChanges(false);
-          // Auto-select first exercise on large screens
           if (isLarge && exs.length > 0) {
             setSelectedExId((prev) => prev ?? exs[0].id);
           }
+          // Mark as initialized after state settles
+          setTimeout(() => {
+            isInitializedRef.current = true;
+          }, 100);
         }
       });
     }, [workoutId, isLarge]),
   );
+
+  // ── Debounced auto-save ──
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      if (!workoutRef.current) return;
+      try {
+        const updated: Workout = { ...workoutRef.current, exercises: editedExercises };
+        await updateWorkout(updated);
+        setWorkout(updated);
+      } catch {
+        // silent fail
+      }
+    }, 600);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [editedExercises]);
 
   // ── Progress ──
   const totalSets = editedExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -138,47 +183,76 @@ export default function WorkoutDetailScreen() {
     updateProgress(completedSets, totalSets);
   }, [completedSets, totalSets, updateProgress]);
 
+  // ── Auto-complete: all sets done → pause + alert ──
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+    if (totalSets > 0 && completedSets === totalSets && !autoFinishedRef.current) {
+      autoFinishedRef.current = true;
+      setTimeout(() => {
+        skipTimer();
+        setIsWorkoutPaused(true);
+        showAlert('운동 완료! 🎉', '모든 세트를 완료했습니다! 수고하셨습니다.', [
+          {
+            text: '메인화면',
+            onPress: () => {
+              endWorkout();
+              navigation.goBack();
+            },
+          },
+          {
+            text: '계속하기',
+            style: 'cancel',
+            onPress: () => {
+              setIsWorkoutPaused(false);
+              autoFinishedRef.current = false;
+            },
+          },
+        ]);
+      }, 400);
+    } else if (completedSets < totalSets) {
+      autoFinishedRef.current = false;
+    }
+  }, [completedSets, totalSets]);
+
   // ── Estimated remaining time ──
   const estimatedMinutesRemaining = useMemo(() => {
-    let totalSeconds = 0;
+    let totalSec = 0;
     let exercisesWithIncompleteSets = 0;
     for (const ex of editedExercises) {
       const incompleteSets = ex.sets.filter((s) => !s.completed).length;
       if (incompleteSets === 0) continue;
       exercisesWithIncompleteSets++;
       const restTime = exerciseRestTimes[ex.exercise.id] ?? defaultRestTime;
-      totalSeconds += incompleteSets * 60; // 세트당 1분
-      totalSeconds += incompleteSets * restTime; // 휴식시간
+      totalSec += incompleteSets * 60;
+      totalSec += incompleteSets * restTime;
     }
-    const transitions = Math.max(0, exercisesWithIncompleteSets - 1);
-    totalSeconds += transitions * 120; // 종목 전환 2분
-    return Math.ceil(totalSeconds / 60);
+    totalSec += Math.max(0, exercisesWithIncompleteSets - 1) * 120;
+    return Math.ceil(totalSec / 60);
   }, [editedExercises, exerciseRestTimes, defaultRestTime]);
 
-  const updateExercises = (updater: (prev: WorkoutExercise[]) => WorkoutExercise[]) => {
-    setEditedExercises(updater);
-    setHasChanges(true);
+  // ── Handlers ──
+
+  const handlePauseWorkout = () => {
+    skipTimer();
+    setIsWorkoutPaused(true);
   };
 
-  // Auto-save helper
-  const autoSave = async (exercises: WorkoutExercise[]) => {
-    if (!workout) return;
-    try {
-      const updated: Workout = { ...workout, exercises };
-      await updateWorkout(updated);
-      setWorkout(updated);
-    } catch {
-      // silent fail for auto-save
-    }
+  const handleResumeWorkout = () => {
+    setIsWorkoutPaused(false);
   };
 
-  // ── Set completion toggle ──
+  const handleGoToMain = () => {
+    endWorkout();
+    navigation.goBack();
+  };
+
   const toggleCompleted = (
     exId: string,
     setId: string,
     currentCompleted: boolean,
     exerciseId: string,
   ) => {
+    if (isWorkoutPaused) return;
     if (currentCompleted) {
       showAlert('세트 완료 취소', '이 세트의 완료를 취소하시겠습니까?', [
         { text: '아니요', style: 'cancel' },
@@ -186,37 +260,30 @@ export default function WorkoutDetailScreen() {
           text: '취소',
           style: 'destructive',
           onPress: () => {
-            setEditedExercises((prev) => {
-              const next = prev.map((ex) => {
+            setEditedExercises((prev) =>
+              prev.map((ex) => {
                 if (ex.id !== exId) return ex;
                 return {
                   ...ex,
                   sets: ex.sets.map((s) => (s.id === setId ? { ...s, completed: false } : s)),
                 };
-              });
-              autoSave(next);
-              return next;
-            });
-            setHasChanges(true);
+              }),
+            );
             skipTimer();
           },
         },
       ]);
       return;
     }
-
-    setEditedExercises((prev) => {
-      const next = prev.map((ex) => {
+    setEditedExercises((prev) =>
+      prev.map((ex) => {
         if (ex.id !== exId) return ex;
         return {
           ...ex,
           sets: ex.sets.map((s) => (s.id === setId ? { ...s, completed: true } : s)),
         };
-      });
-      autoSave(next);
-      return next;
-    });
-    setHasChanges(true);
+      }),
+    );
     const customTime = exerciseRestTimes[exerciseId];
     startTimer(customTime != null ? customTime : defaultRestTime);
   };
@@ -227,7 +294,7 @@ export default function WorkoutDetailScreen() {
     field: keyof Pick<WorkoutSet, 'weight' | 'reps'>,
     value: number,
   ) => {
-    updateExercises((prev) =>
+    setEditedExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exId) return ex;
         const setIdx = ex.sets.findIndex((s) => s.id === setId);
@@ -235,7 +302,6 @@ export default function WorkoutDetailScreen() {
           ...ex,
           sets: ex.sets.map((s, idx) => {
             if (s.id === setId) return { ...s, [field]: Math.max(0, value) };
-            // 이후 세트 중 빈칸(0)인 경우만 자동 채우기
             if (idx > setIdx && s[field] === 0) return { ...s, [field]: Math.max(0, value) };
             return s;
           }),
@@ -245,7 +311,7 @@ export default function WorkoutDetailScreen() {
   };
 
   const addSet = (exId: string) => {
-    updateExercises((prev) =>
+    setEditedExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exId) return ex;
         const last = ex.sets[ex.sets.length - 1];
@@ -261,7 +327,7 @@ export default function WorkoutDetailScreen() {
   };
 
   const removeSet = (exId: string, setId: string) => {
-    updateExercises((prev) =>
+    setEditedExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exId || ex.sets.length <= 1) return ex;
         return { ...ex, sets: ex.sets.filter((s) => s.id !== setId) };
@@ -269,49 +335,44 @@ export default function WorkoutDetailScreen() {
     );
   };
 
-  const handleSave = async () => {
-    if (!workout) return;
-    try {
-      const updated: Workout = { ...workout, exercises: editedExercises };
-      await updateWorkout(updated);
-      setWorkout(updated);
-      setHasChanges(false);
-      showAlert('저장 완료', '운동 기록이 저장되었습니다.');
-    } catch {
-      showAlert('오류', '운동 기록 저장에 실패했습니다.');
-    }
-  };
-
+  // #2: 운동 변경 - 세트/무게/횟수 원래대로 유지
   const handleChangeExercise = (targetWexId: string, newExerciseId: string) => {
     const newEx = EXERCISES.find((e) => e.id === newExerciseId);
     if (!newEx) return;
     showAlert(
       '운동 변경',
-      '운동을 변경하면 기존 세트 기록이 초기화됩니다. 계속하시겠습니까?',
+      `"${displayName(newEx)}"으로 변경합니다.\n기존 세트 기록은 유지됩니다.`,
       [
         { text: '취소', style: 'cancel' },
         {
           text: '변경',
-          style: 'destructive',
           onPress: () => {
             setChangeTargetExId(null);
-            setEditedExercises((prev) => {
-              const next = prev.map((ex) => {
+            setEditedExercises((prev) =>
+              prev.map((ex) => {
                 if (ex.id !== targetWexId) return ex;
-                return {
-                  ...ex,
-                  exercise: newEx,
-                  sets: ex.sets.map((s) => ({ ...s, completed: false, weight: 0, reps: 0 })),
-                };
-              });
-              autoSave(next);
-              return next;
-            });
-            setHasChanges(true);
+                return { ...ex, exercise: newEx }; // 세트/무게/횟수 유지
+              }),
+            );
           },
         },
       ],
     );
+  };
+
+  // #1: 운동 추가
+  const handleAddExercise = (exerciseId: string) => {
+    const ex = EXERCISES.find((e) => e.id === exerciseId);
+    if (!ex) return;
+    const newWex: WorkoutExercise = {
+      id: generateId(),
+      exercise: ex,
+      sets: [{ id: generateId(), weight: 0, reps: 0, completed: false }],
+    };
+    setEditedExercises((prev) => [...prev, newWex]);
+    if (isLarge) setSelectedExId(newWex.id);
+    setShowAddExModal(false);
+    setAddExSearch('');
   };
 
   const handleDelete = () => {
@@ -329,26 +390,6 @@ export default function WorkoutDetailScreen() {
           } catch {
             showAlert('오류', '운동 기록 삭제에 실패했습니다.');
           }
-        },
-      },
-    ]);
-  };
-
-  const handleEndWorkout = () => {
-    showAlert('운동 종료', '운동을 종료하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '확인',
-        onPress: async () => {
-          if (workout) {
-            try {
-              await updateWorkout({ ...workout, exercises: editedExercises });
-            } catch {
-              // silent fail
-            }
-          }
-          endWorkout();
-          (navigation as any).navigate('MainTabs');
         },
       },
     ]);
@@ -379,10 +420,10 @@ export default function WorkoutDetailScreen() {
         <View style={styles.exerciseCardHeader}>
           <View style={styles.exerciseCardHeaderLeft}>
             <Text style={[styles.exerciseName, { color: colors.text, fontSize: isLarge ? 18 : 17 }]}>
-              {ex.exercise.name}
+              {displayName(ex.exercise)}
             </Text>
             <Text style={[styles.muscleGroups, { color: colors.textSub }]}>
-              {[ex.exercise.equipment, ex.exercise.description].filter(Boolean).join(' · ')}
+              {ex.exercise.equipment}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -391,7 +432,7 @@ export default function WorkoutDetailScreen() {
             </Text>
             <View style={[styles.restTimeBadge, { backgroundColor: colors.primaryBg }]}>
               <Ionicons name="timer-outline" size={12} color="#4F8EF7" />
-              <Text style={styles.restTimeBadgeText}>{effectiveRestTime}초</Text>
+              <Text style={styles.restTimeBadgeText}>{formatSeconds(effectiveRestTime)}</Text>
             </View>
             <TouchableOpacity
               style={[styles.changeExBtn, { backgroundColor: colors.chipBg }]}
@@ -445,6 +486,7 @@ export default function WorkoutDetailScreen() {
                 color={ex.sets.length <= 1 ? '#e0e0e0' : '#FF5C5C'}
               />
             </TouchableOpacity>
+            {/* #4: 완료 버튼 - 운동 종료 상태일 때 비활성화 */}
             <TouchableOpacity
               style={[
                 styles.cellComplete,
@@ -452,39 +494,105 @@ export default function WorkoutDetailScreen() {
                 s.completed
                   ? styles.checkBtnDone
                   : { backgroundColor: isDark ? '#3A3A58' : '#E8E8E8' },
+                isWorkoutPaused && styles.checkBtnDisabled,
               ]}
               onPress={() => toggleCompleted(ex.id, s.id, s.completed, ex.exercise.id)}
+              disabled={isWorkoutPaused}
             >
               <Ionicons
                 name="checkmark"
                 size={16}
-                color={s.completed ? '#fff' : isDark ? '#7070A0' : '#bbb'}
+                color={
+                  isWorkoutPaused
+                    ? (isDark ? '#555' : '#ccc')
+                    : s.completed
+                    ? '#fff'
+                    : isDark
+                    ? '#7070A0'
+                    : '#bbb'
+                }
               />
             </TouchableOpacity>
           </View>
         ))}
 
-        <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(ex.id)}>
-          <Ionicons name="add-circle-outline" size={16} color="#4F8EF7" />
-          <Text style={styles.addSetText}>세트 추가</Text>
+        <TouchableOpacity
+          style={styles.addSetBtn}
+          onPress={() => addSet(ex.id)}
+          disabled={isWorkoutPaused}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={isWorkoutPaused ? '#ccc' : '#4F8EF7'} />
+          <Text style={[styles.addSetText, isWorkoutPaused && { color: '#ccc' }]}>세트 추가</Text>
         </TouchableOpacity>
       </View>
     );
   };
+
+  // ── Action buttons ──
+  const actionButtons = (
+    <View style={styles.actionButtonsWrap}>
+      {/* #1: 운동 추가 버튼 */}
+      <TouchableOpacity
+        style={[styles.addExerciseButton, { borderColor: colors.primary }]}
+        onPress={() => setShowAddExModal(true)}
+        disabled={isWorkoutPaused}
+      >
+        <Ionicons name="add-circle-outline" size={18} color={isWorkoutPaused ? '#ccc' : colors.primary} />
+        <Text style={[styles.addExerciseButtonText, { color: isWorkoutPaused ? '#ccc' : colors.primary }]}>
+          운동 추가
+        </Text>
+      </TouchableOpacity>
+
+      {/* #3/#5: 종료/재개/메인화면 */}
+      {isWorkoutPaused ? (
+        <>
+          <TouchableOpacity style={styles.resumeWorkoutButton} onPress={handleResumeWorkout}>
+            <Ionicons name="play-circle-outline" size={18} color="#fff" />
+            <Text style={styles.resumeWorkoutButtonText}>운동 재개</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.goMainButton} onPress={handleGoToMain}>
+            <Ionicons name="home-outline" size={16} color={colors.primary} />
+            <Text style={[styles.goMainButtonText, { color: colors.primary }]}>메인화면으로</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <TouchableOpacity style={styles.endWorkoutButton} onPress={handlePauseWorkout}>
+          <Ionicons name="stop-circle-outline" size={18} color="#fff" />
+          <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
+        onPress={handleDelete}
+      >
+        <Ionicons name="trash-outline" size={18} color="#FF5C5C" />
+        <Text style={styles.deleteButtonText}>운동 기록 삭제</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // ── Progress card ──
   const progressCard = (
     <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
       <View style={styles.progressHeader}>
         <Text style={[styles.progressLabel, { color: colors.textSub }]}>운동 진행률</Text>
-        <Text style={styles.progressCount}>
-          {completedSets} / {totalSets} 세트
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {isWorkoutPaused && (
+            <View style={[styles.pausedBadge, { backgroundColor: '#FF8C0020' }]}>
+              <Ionicons name="pause-circle-outline" size={12} color="#FF8C00" />
+              <Text style={styles.pausedBadgeText}>종료됨</Text>
+            </View>
+          )}
+          <Text style={styles.progressCount}>
+            {completedSets} / {totalSets} 세트
+          </Text>
+        </View>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
-      {estimatedMinutesRemaining > 0 && completedSets < totalSets && (
+      {estimatedMinutesRemaining > 0 && completedSets < totalSets && !isWorkoutPaused && (
         <View style={styles.estimatedRow}>
           <Ionicons name="time-outline" size={13} color={colors.textMuted} />
           <Text style={[styles.estimatedText, { color: colors.textMuted }]}>
@@ -519,21 +627,37 @@ export default function WorkoutDetailScreen() {
         )}
         <View style={styles.metaItem}>
           <Ionicons name="barbell-outline" size={16} color="#4F8EF7" />
-          <Text style={styles.metaText}>{workout.exercises.length}종목</Text>
+          <Text style={styles.metaText}>{editedExercises.length}종목</Text>
         </View>
       </View>
     </View>
   );
 
-  // ── LARGE SCREEN: 2-column layout ──
+  // ── Add exercise candidates ──
+  const addExCandidates = EXERCISES.filter(
+    (e) =>
+      addExSearch === '' ||
+      e.name.includes(addExSearch) ||
+      e.category.includes(addExSearch) ||
+      (e.description ?? '').includes(addExSearch),
+  );
+
+  // ── LARGE SCREEN: 2-column ──
   if (isLarge) {
     const selectedEx = editedExercises.find((e) => e.id === selectedExId) ?? editedExercises[0];
 
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <View style={[styles.largeLayout, { paddingBottom: timerActive ? TIMER_BAR_HEIGHT + insets.bottom + 8 : 16 }]}>
-          {/* Left column: exercise list + info */}
-          <View style={[styles.leftColumn, { backgroundColor: colors.card, borderRightColor: colors.border }]}>
+        <View
+          style={[
+            styles.largeLayout,
+            { paddingBottom: timerActive ? TIMER_BAR_HEIGHT + insets.bottom + 8 : 16 },
+          ]}
+        >
+          {/* Left column */}
+          <View
+            style={[styles.leftColumn, { backgroundColor: colors.card, borderRightColor: colors.border }]}
+          >
             <ScrollView contentContainerStyle={{ padding: 16 }}>
               {headerCard}
               {workout.notes && (
@@ -547,20 +671,26 @@ export default function WorkoutDetailScreen() {
               <Text style={[styles.sidebarSectionLabel, { color: colors.textMuted }]}>운동 종목</Text>
               {editedExercises.map((ex) => {
                 const exDone = ex.sets.filter((s) => s.completed).length;
-                const isSelected = ex.id === (selectedEx?.id);
+                const isSelected = ex.id === selectedEx?.id;
                 return (
                   <TouchableOpacity
                     key={ex.id}
                     style={[
                       styles.sidebarItem,
-                      { backgroundColor: isSelected ? colors.primaryBg : colors.background, borderColor: isSelected ? '#4F8EF7' : 'transparent' },
+                      {
+                        backgroundColor: isSelected ? colors.primaryBg : colors.background,
+                        borderColor: isSelected ? '#4F8EF7' : 'transparent',
+                      },
                     ]}
                     onPress={() => setSelectedExId(ex.id)}
                     activeOpacity={0.7}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]} numberOfLines={1}>
-                        {ex.exercise.name}
+                      <Text
+                        style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {displayName(ex.exercise)}
                       </Text>
                       <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
                         {exDone}/{ex.sets.length} 세트
@@ -575,36 +705,13 @@ export default function WorkoutDetailScreen() {
             </ScrollView>
           </View>
 
-          {/* Right column: set editor */}
-          <ScrollView
-            style={styles.rightColumn}
-            contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
-          >
+          {/* Right column */}
+          <ScrollView style={styles.rightColumn} contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
             {selectedEx && renderExerciseCard(selectedEx)}
-
-            {hasChanges && (
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-                <Text style={styles.saveButtonText}>변경사항 저장</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.endWorkoutButton} onPress={handleEndWorkout}>
-              <Ionicons name="stop-circle-outline" size={18} color="#fff" />
-              <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash-outline" size={18} color="#FF5C5C" />
-              <Text style={styles.deleteButtonText}>운동 기록 삭제</Text>
-            </TouchableOpacity>
+            {actionButtons}
           </ScrollView>
         </View>
 
-        {/* Timer bar */}
         {timerActive && (
           <TimerBar
             timerSeconds={timerSeconds}
@@ -618,7 +725,6 @@ export default function WorkoutDetailScreen() {
           />
         )}
 
-        {/* Exercise change modal */}
         {changeTargetExId && (
           <ExerciseChangeModal
             targetWexId={changeTargetExId}
@@ -629,20 +735,33 @@ export default function WorkoutDetailScreen() {
             colors={colors}
           />
         )}
+
+        {showAddExModal && (
+          <AddExerciseModal
+            search={addExSearch}
+            onSearchChange={setAddExSearch}
+            candidates={addExCandidates}
+            onSelect={handleAddExercise}
+            onClose={() => { setShowAddExModal(false); setAddExSearch(''); }}
+            colors={colors}
+          />
+        )}
       </View>
     );
   }
 
-  // ── SMALL/MEDIUM SCREEN: single column ──
+  // ── SMALL/MEDIUM SCREEN ──
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {/* 진행률 고정 헤더 */}
       <View style={{ paddingHorizontal: horizontalPad, paddingTop: 12, backgroundColor: colors.background }}>
         {progressCard}
       </View>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.content, { paddingBottom: bottomPad, paddingHorizontal: horizontalPad }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: bottomPad, paddingHorizontal: horizontalPad },
+        ]}
       >
         {headerCard}
 
@@ -654,29 +773,9 @@ export default function WorkoutDetailScreen() {
         )}
 
         {editedExercises.map(renderExerciseCard)}
-
-        {hasChanges && (
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-            <Text style={styles.saveButtonText}>변경사항 저장</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.endWorkoutButton} onPress={handleEndWorkout}>
-          <Ionicons name="stop-circle-outline" size={18} color="#fff" />
-          <Text style={styles.endWorkoutButtonText}>운동 종료</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.deleteButton, { backgroundColor: colors.destructiveBg }]}
-          onPress={handleDelete}
-        >
-          <Ionicons name="trash-outline" size={18} color="#FF5C5C" />
-          <Text style={styles.deleteButtonText}>운동 기록 삭제</Text>
-        </TouchableOpacity>
+        {actionButtons}
       </ScrollView>
 
-      {/* Timer bar */}
       {timerActive && (
         <TimerBar
           timerSeconds={timerSeconds}
@@ -690,7 +789,6 @@ export default function WorkoutDetailScreen() {
         />
       )}
 
-      {/* Exercise change modal */}
       {changeTargetExId && (
         <ExerciseChangeModal
           targetWexId={changeTargetExId}
@@ -701,14 +799,97 @@ export default function WorkoutDetailScreen() {
           colors={colors}
         />
       )}
+
+      {showAddExModal && (
+        <AddExerciseModal
+          search={addExSearch}
+          onSearchChange={setAddExSearch}
+          candidates={addExCandidates}
+          onSelect={handleAddExercise}
+          onClose={() => { setShowAddExModal(false); setAddExSearch(''); }}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────
-function displayName(ex: Exercise): string {
-  return ex.description ? `${ex.name} - ${ex.description}` : ex.name;
+// ── Add Exercise Modal ────────────────────────────────────────
+function AddExerciseModal({
+  search,
+  onSearchChange,
+  candidates,
+  onSelect,
+  onClose,
+  colors,
+}: {
+  search: string;
+  onSearchChange: (v: string) => void;
+  candidates: Exercise[];
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  colors: any;
+}) {
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={addExStyles.overlay}>
+        <View style={[addExStyles.sheet, { backgroundColor: colors.card }]}>
+          <View style={addExStyles.header}>
+            <Text style={[addExStyles.title, { color: colors.text }]}>운동 추가</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={colors.textSub} />
+            </TouchableOpacity>
+          </View>
+          <View style={[addExStyles.searchBox, { backgroundColor: colors.cardAlt, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              value={search}
+              onChangeText={onSearchChange}
+              placeholder="운동 검색..."
+              placeholderTextColor={colors.textMuted}
+              style={[addExStyles.searchInput, { color: colors.text }]}
+              autoFocus
+            />
+          </View>
+          <FlatList
+            data={candidates}
+            keyExtractor={(e) => e.id}
+            style={addExStyles.list}
+            ItemSeparatorComponent={() => (
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+            )}
+            ListEmptyComponent={
+              <Text style={[addExStyles.empty, { color: colors.textMuted }]}>
+                검색 결과가 없습니다.
+              </Text>
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={addExStyles.item}
+                onPress={() => onSelect(item.id)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[addExStyles.itemName, { color: colors.text }]}>
+                    {displayName(item)}
+                  </Text>
+                  <Text style={[addExStyles.itemSub, { color: colors.textSub }]}>
+                    {item.category} · {item.equipment}
+                  </Text>
+                </View>
+                <View style={[addExStyles.categoryBadge, { backgroundColor: colors.primaryBg }]}>
+                  <Text style={addExStyles.categoryBadgeText}>{item.category}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
 }
+
+// ── Helpers ──────────────────────────────────────────────────
 
 // ── Exercise change modal ──────────────────────────────────────
 type ListItem =
@@ -735,7 +916,6 @@ function ExerciseChangeModal({
 
   const currentCategory = target.exercise.category;
 
-  // 대체운동: 커스텀 우선, 없으면 EXERCISES 기본값
   const altIds =
     customAlternatives[target.exercise.id] !== undefined
       ? customAlternatives[target.exercise.id]
@@ -746,7 +926,6 @@ function ExerciseChangeModal({
     .map((id) => EXERCISES.find((e) => e.id === id))
     .filter((e): e is Exercise => !!e && e.id !== target.exercise.id);
 
-  // 같은 카테고리 (대체운동 및 현재 운동 제외)
   const categoryOthers = EXERCISES.filter(
     (e) => e.category === currentCategory && e.id !== target.exercise.id && !altSet.has(e.id),
   );
@@ -820,45 +999,7 @@ function ExerciseChangeModal({
   );
 }
 
-const exChangeStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '70%',
-    paddingTop: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
-  subtitle: { fontSize: 12 },
-  list: { flex: 1 },
-  sectionHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  sectionHeaderText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  itemName: { fontSize: 15, fontWeight: '600', marginBottom: 3 },
-  itemSub: { fontSize: 12 },
-  empty: { textAlign: 'center', padding: 32, fontSize: 14 },
-});
-
-// ── Timer bar component ──
+// ── Timer bar ─────────────────────────────────────────────────
 function TimerBar({
   timerSeconds,
   timerProgress,
@@ -885,12 +1026,11 @@ function TimerBar({
         { paddingBottom: Math.max(insets.bottom, 8), backgroundColor: colors.timerBg },
       ]}
     >
-      {/* Top row: label + skip + reset */}
       <View style={styles.timerTopRow}>
         <View style={styles.timerLeft}>
           <Ionicons name="timer-outline" size={15} color="rgba(255,255,255,0.7)" />
           <Text style={styles.timerLabel}>휴식 중</Text>
-          <Text style={styles.timerDurationHint}>{timerDuration}초</Text>
+          <Text style={styles.timerDurationHint}>{formatSeconds(timerDuration)}</Text>
         </View>
         <View style={styles.timerRight}>
           <TouchableOpacity style={styles.timerBtn} onPress={onSkip}>
@@ -902,32 +1042,87 @@ function TimerBar({
         </View>
       </View>
 
-      {/* Middle row: -10 | countdown | +10 */}
       <View style={styles.timerCountdownRow}>
-        <TouchableOpacity
-          style={styles.timerAdjustCircle}
-          onPress={() => onAdjust(-10)}
-        >
+        <TouchableOpacity style={styles.timerAdjustCircle} onPress={() => onAdjust(-10)}>
           <Text style={styles.timerAdjustCircleText}>−10</Text>
         </TouchableOpacity>
-
         <Text style={styles.timerCountdown}>{formatTime(timerSeconds)}</Text>
-
-        <TouchableOpacity
-          style={styles.timerAdjustCircle}
-          onPress={() => onAdjust(10)}
-        >
+        <TouchableOpacity style={styles.timerAdjustCircle} onPress={() => onAdjust(10)}>
           <Text style={styles.timerAdjustCircleText}>+10</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Progress bar */}
       <View style={styles.timerTrack}>
         <View style={[styles.timerFill, { width: `${timerProgress * 100}%` }]} />
       </View>
     </View>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────
+const addExStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '75%', paddingTop: 20 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+  },
+  title: { fontSize: 18, fontWeight: '700' },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 2 },
+  list: { flex: 1 },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  itemName: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+  itemSub: { fontSize: 12 },
+  categoryBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  categoryBadgeText: { fontSize: 11, color: '#4F8EF7', fontWeight: '600' },
+  empty: { textAlign: 'center', padding: 32, fontSize: 14 },
+});
+
+const exChangeStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingTop: 20 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  title: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
+  subtitle: { fontSize: 12 },
+  list: { flex: 1 },
+  sectionHeader: { paddingHorizontal: 20, paddingVertical: 8 },
+  sectionHeaderText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  itemName: { fontSize: 15, fontWeight: '600', marginBottom: 3 },
+  itemSub: { fontSize: 12 },
+  empty: { textAlign: 'center', padding: 32, fontSize: 14 },
+});
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
@@ -936,49 +1131,24 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   notFoundText: { fontSize: 16 },
 
-  // Large screen 2-col layout
-  largeLayout: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  leftColumn: {
-    width: 280,
-    borderRightWidth: 1,
-  },
-  rightColumn: {
-    flex: 1,
-  },
+  largeLayout: { flex: 1, flexDirection: 'row' },
+  leftColumn: { width: 280, borderRightWidth: 1 },
+  rightColumn: { flex: 1 },
   sidebarSectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 12,
-    marginBottom: 8,
-    marginLeft: 2,
+    fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5,
+    marginTop: 12, marginBottom: 8, marginLeft: 2,
   },
   sidebarItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 6,
-    borderWidth: 1.5,
+    flexDirection: 'row', alignItems: 'center', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6, borderWidth: 1.5,
   },
   sidebarItemName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   sidebarItemSets: { fontSize: 12 },
 
-  // Progress card
   progressCard: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: 14, padding: 16, marginBottom: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
   },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   progressLabel: { fontSize: 13, fontWeight: '600' },
@@ -987,17 +1157,16 @@ const styles = StyleSheet.create({
   progressFill: { height: 8, backgroundColor: '#4F8EF7', borderRadius: 4 },
   estimatedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
   estimatedText: { fontSize: 12, fontWeight: '500' },
+  pausedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
+  },
+  pausedBadgeText: { fontSize: 10, fontWeight: '700', color: '#FF8C00' },
 
-  // Header card
   headerCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: 16, padding: 20, marginBottom: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
   },
   title: { fontSize: 22, fontWeight: '700', marginBottom: 6 },
   date: { fontSize: 14, marginBottom: 14 },
@@ -1006,228 +1175,117 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 14, color: '#4F8EF7', fontWeight: '600' },
 
   notesCard: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    gap: 8,
-    alignItems: 'flex-start',
+    flexDirection: 'row', borderRadius: 12, padding: 14,
+    marginBottom: 12, gap: 8, alignItems: 'flex-start',
   },
   notesText: { flex: 1, fontSize: 14, lineHeight: 20 },
 
-  // Exercise card
   exerciseCard: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: 14, padding: 16, marginBottom: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
   },
-  exerciseCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
+  exerciseCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   exerciseCardHeaderLeft: { flex: 1 },
   exerciseName: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
   muscleGroups: { fontSize: 12 },
   changeExBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 7, paddingVertical: 4, borderRadius: 8,
   },
   changeExBtnText: { fontSize: 11, fontWeight: '600' },
   restTimeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
   },
   restTimeBadgeText: { fontSize: 11, color: '#4F8EF7', fontWeight: '600' },
 
   setTableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    paddingBottom: 8,
-    marginBottom: 6,
+    flexDirection: 'row', alignItems: 'center',
+    borderBottomWidth: 1, paddingBottom: 8, marginBottom: 6,
   },
   headerText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
-
   setRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 4,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 4, borderRadius: 8, marginBottom: 4,
   },
   setRowCompleted: { opacity: 0.5 },
   completedText: { color: '#aaa' },
-
-  cellNum: {
-    width: 28,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  cellNum: { width: 28, textAlign: 'center', fontSize: 14, fontWeight: '600' },
   cellStepper: { flex: 1, marginHorizontal: 3 },
-  cellDelete: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 2,
-  },
-  cellComplete: {
-    width: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  checkBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  cellDelete: { width: 28, alignItems: 'center', justifyContent: 'center', marginLeft: 2 },
+  cellComplete: { width: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
+  checkBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   checkBtnDone: { backgroundColor: '#34C759' },
-
+  checkBtnDisabled: { opacity: 0.4 },
   addSetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingVertical: 6,
-    alignSelf: 'flex-start',
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, paddingVertical: 6, alignSelf: 'flex-start',
   },
   addSetText: { fontSize: 14, color: '#4F8EF7', fontWeight: '600' },
 
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#4F8EF7',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#4F8EF7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+  actionButtonsWrap: { marginTop: 4 },
+  addExerciseButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 14, borderWidth: 1.5, padding: 14, marginBottom: 10,
   },
-  saveButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
-
+  addExerciseButtonText: { fontSize: 15, fontWeight: '600' },
   endWorkoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FF8C00',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#FF8C00',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#FF8C00', borderRadius: 14, padding: 16, marginBottom: 10,
+    shadowColor: '#FF8C00', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
   },
   endWorkoutButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
-
+  resumeWorkoutButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#34C759', borderRadius: 14, padding: 16, marginBottom: 10,
+    shadowColor: '#34C759', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+  },
+  resumeWorkoutButtonText: { fontSize: 16, color: '#fff', fontWeight: '700' },
+  goMainButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 14, borderWidth: 1.5, padding: 14, marginBottom: 10,
+    borderColor: '#4F8EF7',
+  },
+  goMainButtonText: { fontSize: 15, fontWeight: '600' },
   deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 12, padding: 14, marginTop: 4,
   },
   deleteButtonText: { fontSize: 15, color: '#FF5C5C', fontWeight: '600' },
 
-  // ── Timer bar ──
   timerBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 10,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 20, paddingTop: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 10,
   },
-  timerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  timerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    flex: 1,
-  },
+  timerTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  timerLeft: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
   timerLabel: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   timerDurationHint: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginLeft: 4 },
   timerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   timerBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8,
   },
   timerBtnText: { fontSize: 13, color: '#fff', fontWeight: '600' },
-
-  // -10 | countdown | +10
   timerCountdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 16, marginBottom: 10,
   },
   timerAdjustCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
-  timerAdjustCircleText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '700',
-  },
+  timerAdjustCircleText: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '700' },
   timerCountdown: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 2,
-    minWidth: 110,
-    textAlign: 'center',
+    fontSize: 36, fontWeight: '800', color: '#fff',
+    letterSpacing: 2, minWidth: 110, textAlign: 'center',
   },
-
-  timerTrack: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
+  timerTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, overflow: 'hidden' },
   timerFill: { height: 4, backgroundColor: '#4F8EF7', borderRadius: 2 },
 });
