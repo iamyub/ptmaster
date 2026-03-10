@@ -24,6 +24,7 @@ import { addWorkout, loadWorkouts } from '../storage/workoutStorage';
 import { loadRoutines } from '../storage/routineStorage';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
+import { useWorkout } from '../context/WorkoutContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'AddWorkout'>;
@@ -46,6 +47,7 @@ function findLastSets(workouts: Workout[], exerciseId: string): { weight: number
 
 export default function AddWorkoutScreen() {
   const { colors } = useTheme();
+  const { activeWorkout, isWorkoutRunning, endWorkout } = useWorkout();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const routineExercises = route.params?.routineExercises;
@@ -177,6 +179,24 @@ export default function AddWorkoutScreen() {
       showAlert('알림', '최소 하나의 운동을 추가해주세요.');
       return;
     }
+
+    if (activeWorkout && isWorkoutRunning) {
+      showAlert('운동 시작', '진행 중인 운동을 종료하고 새로운 운동을 시작하시겠습니까?', [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '확인',
+          onPress: async () => {
+            endWorkout();
+            await performSave();
+          },
+        },
+      ]);
+    } else {
+      await performSave();
+    }
+  };
+
+  const performSave = async () => {
     setSaving(true);
     try {
       const workout: Workout = {

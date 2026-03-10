@@ -31,8 +31,8 @@ interface WorkoutContextValue {
   timerActive: boolean;
   timerSeconds: number;
   timerDuration: number;
-  initWorkout: (info: ActiveWorkout, alarmSettings: AlarmSettings) => void;
-  updateProgress: (completed: number, total: number) => void;
+  initWorkout: (info: ActiveWorkout, alarmSettings: AlarmSettings, force?: boolean) => void;
+  updateProgress: (completed: number, total: number, workoutId: string) => void;
   startTimer: (duration: number) => void;
   skipTimer: () => void;
   resetTimer: () => void;
@@ -107,18 +107,24 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     };
   }, [timerActive]);
 
-  const initWorkout = useCallback((info: ActiveWorkout, alarmSettings: AlarmSettings) => {
+  const initWorkout = useCallback((info: ActiveWorkout, alarmSettings: AlarmSettings, force: boolean = false) => {
     alarmRef.current = alarmSettings;
     setActiveWorkout((prev) => {
-      if (prev?.workoutId === info.workoutId) {
-        return { ...prev, completedSets: info.completedSets, totalSets: info.totalSets };
+      if (prev && prev.workoutId !== info.workoutId && !force) {
+        // Do not overwrite if a different workout is already active and we are not forcing it
+        return prev;
       }
-      return info;
+      return { ...prev, ...info };
     });
   }, []);
 
-  const updateProgress = useCallback((completed: number, total: number) => {
-    setActiveWorkout((prev) => (prev ? { ...prev, completedSets: completed, totalSets: total } : null));
+  const updateProgress = useCallback((completed: number, total: number, workoutId: string) => {
+    setActiveWorkout((prev) => {
+      if (prev?.workoutId === workoutId) {
+        return { ...prev, completedSets: completed, totalSets: total };
+      }
+      return prev;
+    });
   }, []);
 
   const startTimer = useCallback((duration: number) => {

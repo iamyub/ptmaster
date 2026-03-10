@@ -119,8 +119,10 @@ export default function WorkoutDetailScreen() {
 
   // Sync running state to WorkoutContext (controls mini bar visibility)
   useEffect(() => {
-    setWorkoutRunning(!isWorkoutPaused && !isExpired);
-  }, [isWorkoutPaused, isExpired, setWorkoutRunning]);
+    if (activeWorkout?.workoutId === workoutId) {
+      setWorkoutRunning(!isWorkoutPaused && !isExpired);
+    }
+  }, [isWorkoutPaused, isExpired, setWorkoutRunning, activeWorkout, workoutId]);
 
   // ── Load settings ──
   useEffect(() => {
@@ -202,8 +204,8 @@ export default function WorkoutDetailScreen() {
   }, [workout, completedSets, totalSets, alarmSettings, workoutId, initWorkout]);
 
   useEffect(() => {
-    updateProgress(completedSets, totalSets);
-  }, [completedSets, totalSets, updateProgress]);
+    updateProgress(completedSets, totalSets, workoutId);
+  }, [completedSets, totalSets, updateProgress, workoutId]);
 
   // ── Auto-complete: all sets done → pause + alert ──
   useEffect(() => {
@@ -215,7 +217,7 @@ export default function WorkoutDetailScreen() {
         setIsWorkoutPaused(true);
         showAlert('운동 완료! 🎉', '모든 세트를 완료했습니다! 수고하셨습니다.', [
           {
-            text: '메인화면',
+            text: '메인 화면',
             onPress: () => {
               endWorkout();
               navigation.goBack();
@@ -264,7 +266,31 @@ export default function WorkoutDetailScreen() {
   };
 
   const handleResumeWorkout = async () => {
+    if (activeWorkout && activeWorkout.workoutId !== workoutId && isWorkoutRunning) {
+      showAlert('운동 시작', '진행 중인 운동을 종료하고 새로운 운동을 시작하시겠습니까?', [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '확인',
+          onPress: async () => {
+            endWorkout();
+            await performResume();
+          },
+        },
+      ]);
+    } else {
+      await performResume();
+    }
+  };
+
+  const performResume = async () => {
     setIsWorkoutPaused(false);
+    if (workout) {
+      initWorkout(
+        { workoutId, workoutName: workout.title, completedSets, totalSets },
+        alarmSettings,
+        true, // force init this one as active
+      );
+    }
     if (isExpired && workout) {
       const today = new Date().toISOString();
       const updated: Workout = { ...workout, date: today };

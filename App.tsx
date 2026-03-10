@@ -12,6 +12,7 @@ import {
   Platform,
   useWindowDimensions,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -68,6 +69,27 @@ function MiniWorkoutBar({
 }) {
   const { activeWorkout, timerActive, timerSeconds, isWorkoutRunning } = useWorkout();
   const { colors, isDark } = useTheme();
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(blinkAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [blinkAnim]);
+
   if (!activeWorkout || !isWorkoutRunning) return null;
 
   const progress =
@@ -95,7 +117,7 @@ function MiniWorkoutBar({
       activeOpacity={0.85}
     >
       <View style={miniStyles.barLeft}>
-        <Ionicons name="barbell-outline" size={14} color={isDark ? "rgba(255,255,255,0.7)" : "#4F8EF7"} />
+        <Animated.View style={[miniStyles.blinkDot, { opacity: blinkAnim }]} />
         <Text style={[miniStyles.barName, { color: colors.text }]} numberOfLines={1}>
           {activeWorkout.workoutName}
         </Text>
@@ -139,8 +161,9 @@ const miniStyles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
   },
-  barLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  barName: { fontSize: 13, fontWeight: '600', color: '#fff', flex: 1 },
+  barLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  blinkDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#34C759' },
+  barName: { fontSize: 13, fontWeight: '600', flex: 1 },
   barCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   miniTrack: { width: 60, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, overflow: 'hidden' },
   miniFill: { height: 4, backgroundColor: '#4F8EF7', borderRadius: 2 },

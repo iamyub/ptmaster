@@ -214,6 +214,23 @@ export default function HomeScreen() {
   };
 
   const handleStartRoutine = async (routine: Routine) => {
+    if (activeWorkout && isWorkoutRunning) {
+      showAlert('운동 시작', '진행 중인 운동을 종료하고 새로운 운동을 시작하시겠습니까?', [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '확인',
+          onPress: async () => {
+            endWorkout();
+            await performStartRoutine(routine);
+          },
+        },
+      ]);
+    } else {
+      await performStartRoutine(routine);
+    }
+  };
+
+  const performStartRoutine = async (routine: Routine) => {
     const exercises: WorkoutExercise[] = routine.exercises
       .map((re): WorkoutExercise | null => {
         const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
@@ -353,7 +370,22 @@ export default function HomeScreen() {
         <View style={styles.startArea}>
           <TouchableOpacity
             style={styles.startButton}
-            onPress={() => navigation.navigate('AddWorkout', {})}
+            onPress={() => {
+              if (activeWorkout && isWorkoutRunning) {
+                showAlert('운동 시작', '진행 중인 운동을 종료하고 새로운 운동을 시작하시겠습니까?', [
+                  { text: '취소', style: 'cancel' },
+                  {
+                    text: '확인',
+                    onPress: () => {
+                      endWorkout();
+                      navigation.navigate('AddWorkout', {});
+                    },
+                  },
+                ]);
+              } else {
+                navigation.navigate('AddWorkout', {});
+              }
+            }}
             activeOpacity={0.85}
           >
             <Ionicons name="barbell-outline" size={isLarge ? 48 : 40} color="#fff" />
