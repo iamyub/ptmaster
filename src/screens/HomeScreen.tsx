@@ -139,7 +139,7 @@ function SwipeableWorkoutCard({
 
 export default function HomeScreen() {
   const { colors } = useTheme();
-  const { activeWorkout } = useWorkout();
+  const { activeWorkout, isWorkoutRunning, endWorkout } = useWorkout();
   const navigation = useNavigation<Nav>();
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
