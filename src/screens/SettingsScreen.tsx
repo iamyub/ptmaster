@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -26,6 +27,7 @@ import { fireAlarm } from '../utils/alarmHelper';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { formatSeconds } from '../utils/timeFormat';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { authService } from '../services/authService';
 
 // ── 상수 ────────────────────────────────────────────────────
 const REST_SNAP_VALUES = [30, 60, 90, 120, 150, 180];
@@ -283,6 +285,31 @@ export default function SettingsScreen() {
     }
     setExerciseRestTimes(updated);
     await saveExerciseRestTime(exerciseId, sec);
+  };
+
+  const handleLogout = () => {
+    const user = authService.getCurrentUser();
+    const isGuest = user?.isAnonymous;
+
+    const title = '로그아웃';
+    const message = isGuest 
+      ? '둘러보기 중인 데이터는 사라질 수 있습니다. 로그아웃 하시겠습니까?' 
+      : '로그아웃 하시겠습니까?';
+
+    Alert.alert(title, message, [
+      { text: '취소', style: 'cancel' },
+      { 
+        text: '로그아웃', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            await authService.signOut();
+          } catch (error) {
+            Alert.alert('오류', '로그아웃 중 문제가 발생했습니다.');
+          }
+        }
+      }
+    ]);
   };
 
   const showVibrationSettings =
@@ -624,6 +651,17 @@ export default function SettingsScreen() {
           </>
         )}
       </View>
+
+      {/* ════ 계정 설정 ════ */}
+      <SectionHeader title="계정" color={c.textSub} />
+      <TouchableOpacity
+        style={[styles.logoutBtn, { backgroundColor: c.card }]}
+        onPress={handleLogout}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="log-out-outline" size={20} color="#FF5C5C" />
+        <Text style={styles.logoutBtnText}>로그아웃</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -790,4 +828,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   autoModeInfoText: { flex: 1, fontSize: 11, lineHeight: 16 },
+
+  // 계정
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  logoutBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FF5C5C',
+  },
 });
