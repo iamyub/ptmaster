@@ -55,6 +55,7 @@ import WorkoutDetailScreen from './src/screens/WorkoutDetailScreen';
 import ManageRoutinesScreen from './src/screens/ManageRoutinesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import WebAlertModal, { WebAlertRef } from './src/components/WebAlertModal';
 import { registerWebAlert } from './src/utils/alert';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -272,17 +273,30 @@ function AppInner() {
   const { colors } = useTheme();
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [isFirstTime, setIsFirstTime] = useState(false);
 
   // Handle user state changes
   useEffect(() => {
-    const subscriber = authService.onAuthStateChanged((user) => {
-      setUser(user);
+    const subscriber = authService.onAuthStateChanged(async (user) => {
       if (user) {
-        authService.syncUserToFirestore(user);
+        // 1. Sync basic info to Firestore
+        await authService.syncUserToFirestore(user);
+        // 2. Check onboarding status
+        const firstTime = await authService.checkIsFirstTime(user.uid);
+        setIsFirstTime(firstTime);
+        setUser(user);
+      } else {
+        // Silent anonymous login if not logged in
+        try {
+          await authService.signInGuest();
+        } catch (e) {
+          console.error('Silent guest login failed:', e);
+          setUser(null);
+        }
       }
       if (initializing) setInitializing(false);
     });
-    return subscriber; // unsubscribe on unmount
+    return subscriber;
   }, [initializing]);
 
   useEffect(() => {
@@ -335,6 +349,13 @@ function AppInner() {
     );
   }
 
+  // If user is logged in but first time, show Onboarding
+  if (user && isFirstTime) {
+    return (
+      <OnboardingScreen onComplete={() => setIsFirstTime(false)} />
+    );
+  }
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider style={{ backgroundColor: colors.background }}>
@@ -349,7 +370,7 @@ function AppInner() {
             }}
           >
             {!user ? (
-              // Login flow
+              // Login flow (usually skipped by silent guest login)
               <Stack.Screen 
                 name="Login" 
                 component={LoginScreen} 
