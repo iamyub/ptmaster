@@ -25,6 +25,7 @@ import { loadRoutines } from '../storage/routineStorage';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout } from '../context/WorkoutContext';
+import { authService } from '../services/authService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'AddWorkout'>;
@@ -53,6 +54,8 @@ export default function AddWorkoutScreen() {
   const routineExercises = route.params?.routineExercises;
   const routineName = route.params?.routineName;
 
+  const currentUser = authService.getCurrentUser();
+
   const defaultTitle = routineName
     ? `${format(new Date(), 'M월 d일', { locale: ko })} - ${routineName}`
     : format(new Date(), 'M월 d일 운동', { locale: ko });
@@ -70,9 +73,10 @@ export default function AddWorkoutScreen() {
 
   // 과거 운동 기록 및 루틴 로드
   useEffect(() => {
-    loadWorkouts().then(setPastWorkouts);
-    loadRoutines().then(setRoutines);
-  }, []);
+    if (!currentUser) return;
+    loadWorkouts(currentUser.uid).then(setPastWorkouts);
+    loadRoutines(currentUser.uid).then(setRoutines);
+  }, [currentUser]);
 
   // 루틴에서 진입: 루틴 preset 세트로 즉시 초기화 (history 불필요)
   useEffect(() => {
@@ -171,6 +175,7 @@ export default function AddWorkoutScreen() {
   };
 
   const handleSave = async () => {
+    if (!currentUser) return;
     if (!title.trim()) {
       showAlert('알림', '운동 제목을 입력해주세요.');
       return;
@@ -197,6 +202,7 @@ export default function AddWorkoutScreen() {
   };
 
   const performSave = async () => {
+    if (!currentUser) return;
     setSaving(true);
     try {
       const workout: Workout = {
@@ -207,7 +213,7 @@ export default function AddWorkoutScreen() {
         exercises,
         notes: notes.trim() || undefined,
       };
-      await addWorkout(workout);
+      await addWorkout(currentUser.uid, workout);
       navigation.replace('WorkoutDetail', { workoutId: workout.id, autoStart: true });
     } catch {
       showAlert('오류', '운동 기록 저장에 실패했습니다.');

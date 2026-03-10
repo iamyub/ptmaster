@@ -23,11 +23,12 @@ import { loadRoutines } from '../storage/routineStorage';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
+import { authService } from '../services/authService';
 
 const GREETINGS = [
   '"현관문을 열고 나가면 이미 운동의 시작"',
   '"운동 안하면 빨리 늙는다"',
-  '"오늘 운동 많이 된다. 밤에 푹 잘꺼야"',
+  '"운동 많이 된다. 오늘 밤에 푹 잘꺼야"',
   '"운동은 하루를 짧게 하지만, 인생을 길게 만든다"',
 ];
 
@@ -154,15 +155,18 @@ export default function HomeScreen() {
   const hPad = isLarge ? 28 : isMedium ? 24 : 20;
   const extraBottomPad = activeWorkout ? MINI_BAR_HEIGHT : 0;
 
+  const currentUser = authService.getCurrentUser();
+
   useFocusEffect(
     useCallback(() => {
-      loadWorkouts().then((all) => {
+      if (!currentUser) return;
+      loadWorkouts(currentUser.uid).then((all) => {
         setTotalWorkouts(all.length);
         setRecentWorkouts(all.slice(0, 5));
       });
-      loadRoutines().then(setRoutines);
+      loadRoutines(currentUser.uid).then(setRoutines);
       fetchWeather();
-    }, [isLarge]),
+    }, [isLarge, currentUser]),
   );
 
   const fetchWeather = async () => {
@@ -195,6 +199,7 @@ export default function HomeScreen() {
   const today = format(new Date(), 'M월 d일 (EEEE)', { locale: ko });
 
   const handleDeleteWorkout = (id: string, title: string) => {
+    if (!currentUser) return;
     showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
@@ -202,7 +207,7 @@ export default function HomeScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteWorkout(id);
+            await deleteWorkout(currentUser.uid, id);
             setRecentWorkouts((prev) => prev.filter((w) => w.id !== id));
             setTotalWorkouts((prev) => prev - 1);
           } catch {
@@ -231,6 +236,7 @@ export default function HomeScreen() {
   };
 
   const performStartRoutine = async (routine: Routine) => {
+    if (!currentUser) return;
     const exercises: WorkoutExercise[] = routine.exercises
       .map((re): WorkoutExercise | null => {
         const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
@@ -257,7 +263,7 @@ export default function HomeScreen() {
     };
 
     try {
-      await addWorkout(newWorkout);
+      await addWorkout(currentUser.uid, newWorkout);
       navigation.navigate('WorkoutDetail', { workoutId: newWorkout.id, autoStart: true });
     } catch {
       showAlert('오류', '운동 시작에 실패했습니다. 다시 시도해주세요.');

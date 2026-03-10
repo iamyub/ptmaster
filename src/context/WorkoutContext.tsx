@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import * as Notifications from 'expo-notifications';
 import { AlarmSettings, DEFAULT_ALARM_SETTINGS, loadAlarmSettings } from '../storage/settingsStorage';
 import { fireAlarm } from '../utils/alarmHelper';
+import { authService } from '../services/authService';
 
 async function sendRestEndNotification() {
   try {
@@ -89,10 +90,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             timerRef.current = null;
           }
           setTimerActive(false);
-          // 최신 설정값으로 알람 실행 (설정 변경이 즉시 반영됨)
-          loadAlarmSettings().then((freshSettings) => {
-            fireAlarm(freshSettings);
-          });
+          
+          // 실시간 유저 정보 확인하여 알람 설정 로드
+          const user = authService.getCurrentUser();
+          if (user) {
+            loadAlarmSettings(user.uid).then((freshSettings) => {
+              fireAlarm(freshSettings);
+            });
+          } else {
+            fireAlarm(DEFAULT_ALARM_SETTINGS);
+          }
+          
           sendRestEndNotification();
           return 0;
         }
@@ -111,7 +119,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     alarmRef.current = alarmSettings;
     setActiveWorkout((prev) => {
       if (prev && prev.workoutId !== info.workoutId && !force) {
-        // Do not overwrite if a different workout is already active and we are not forcing it
         return prev;
       }
       return { ...prev, ...info };

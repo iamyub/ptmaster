@@ -1,26 +1,8 @@
-import { storageGet, storageSet } from '../utils/storage';
-
-const REST_TIME_KEY = '@ptmaster_rest_time';
-const ALARM_SETTINGS_KEY = '@ptmaster_alarm_settings';
-const EXERCISE_REST_TIMES_KEY = '@ptmaster_exercise_rest_times';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../config/firebaseConfig';
 
 export const DEFAULT_REST_TIME = 90;
 
-// ── 기본 휴식 시간 ──────────────────────────────────────────
-export async function loadRestTime(): Promise<number> {
-  try {
-    const val = await storageGet(REST_TIME_KEY);
-    return val ? parseInt(val, 10) : DEFAULT_REST_TIME;
-  } catch {
-    return DEFAULT_REST_TIME;
-  }
-}
-
-export async function saveRestTime(seconds: number): Promise<void> {
-  await storageSet(REST_TIME_KEY, String(seconds));
-}
-
-// ── 알람 설정 ────────────────────────────────────────────────
 export type AlarmType = 'vibration' | 'sound' | 'both' | 'none';
 export type VibrationPattern = 'once' | 'twice' | 'thrice';
 export type SoundType = 'beep' | 'bell' | 'chime';
@@ -37,74 +19,86 @@ export const DEFAULT_ALARM_SETTINGS: AlarmSettings = {
   soundType: 'bell',
 };
 
-// 기존 short/medium/long 값을 새 값으로 마이그레이션
-function migrateVibrationPattern(raw: string): VibrationPattern {
-  if (raw === 'short') return 'once';
-  if (raw === 'medium') return 'twice';
-  if (raw === 'long') return 'thrice';
-  if (raw === 'once' || raw === 'twice' || raw === 'thrice') return raw as VibrationPattern;
-  return DEFAULT_ALARM_SETTINGS.vibrationPattern;
+export type ExerciseRestTimes = Record<string, number | null>;
+export type CustomAlternatives = Record<string, string[]>;
+
+/**
+ * 유저별 설정 문서 참조 반환
+ */
+function getSettingsRef(uid: string) {
+  return doc(db, 'users', uid, 'config', 'settings');
 }
 
-export async function loadAlarmSettings(): Promise<AlarmSettings> {
+// ── 기본 휴식 시간 ──────────────────────────────────────────
+export async function loadRestTime(uid: string): Promise<number> {
+  if (!uid) return DEFAULT_REST_TIME;
   try {
-    const json = await storageGet(ALARM_SETTINGS_KEY);
-    if (!json) return DEFAULT_ALARM_SETTINGS;
-    const parsed = JSON.parse(json);
-    return {
-      ...DEFAULT_ALARM_SETTINGS,
-      ...parsed,
-      vibrationPattern: migrateVibrationPattern(parsed.vibrationPattern ?? ''),
-    };
+    const snap = await getDoc(getSettingsRef(uid));
+    return snap.exists() ? (snap.data().restTime ?? DEFAULT_REST_TIME) : DEFAULT_REST_TIME;
+  } catch {
+    return DEFAULT_REST_TIME;
+  }
+}
+
+export async function saveRestTime(uid: string, seconds: number): Promise<void> {
+  if (!uid) return;
+  await setDoc(getSettingsRef(uid), { restTime: seconds }, { merge: true });
+}
+
+// ── 알람 설정 ────────────────────────────────────────────────
+export async function loadAlarmSettings(uid: string): Promise<AlarmSettings> {
+  if (!uid) return DEFAULT_ALARM_SETTINGS;
+  try {
+    const snap = await getDoc(getSettingsRef(uid));
+    return snap.exists() ? { ...DEFAULT_ALARM_SETTINGS, ...snap.data().alarmSettings } : DEFAULT_ALARM_SETTINGS;
   } catch {
     return DEFAULT_ALARM_SETTINGS;
   }
 }
 
-export async function saveAlarmSettings(settings: AlarmSettings): Promise<void> {
-  await storageSet(ALARM_SETTINGS_KEY, JSON.stringify(settings));
+export async function saveAlarmSettings(uid: string, settings: AlarmSettings): Promise<void> {
+  if (!uid) return;
+  await setDoc(getSettingsRef(uid), { alarmSettings: settings }, { merge: true });
 }
 
 // ── 운동별 개별 휴식 시간 ─────────────────────────────────────
-// null = 기본값 사용, number = 해당 운동 전용 시간(초)
-export type ExerciseRestTimes = Record<string, number | null>;
-
-export async function loadExerciseRestTimes(): Promise<ExerciseRestTimes> {
+export async function loadExerciseRestTimes(uid: string): Promise<ExerciseRestTimes> {
+  if (!uid) return {};
   try {
-    const json = await storageGet(EXERCISE_REST_TIMES_KEY);
-    return json ? JSON.parse(json) : {};
+    const snap = await getDoc(getSettingsRef(uid));
+    return snap.exists() ? (snap.data().exerciseRestTimes ?? {}) : {};
   } catch {
     return {};
   }
 }
 
 export async function saveExerciseRestTime(
+  uid: string,
   exerciseId: string,
   seconds: number | null,
 ): Promise<void> {
-  const times = await loadExerciseRestTimes();
+  if (!uid) return;
+  const times = await loadExerciseRestTimes(uid);
   if (seconds === null) {
     delete times[exerciseId];
   } else {
     times[exerciseId] = seconds;
   }
-  await storageSet(EXERCISE_REST_TIMES_KEY, JSON.stringify(times));
+  await setDoc(getSettingsRef(uid), { exerciseRestTimes: times }, { merge: true });
 }
 
 // ── 대체운동 커스터마이징 ──────────────────────────────────────
-// 사용자가 직접 수정한 대체운동 목록 (exerciseId → altId[])
-const ALTERNATIVE_EXERCISES_KEY = '@ptmaster_alternative_exercises';
-export type CustomAlternatives = Record<string, string[]>;
-
-export async function loadCustomAlternatives(): Promise<CustomAlternatives> {
+export async function loadCustomAlternatives(uid: string): Promise<CustomAlternatives> {
+  if (!uid) return {};
   try {
-    const json = await storageGet(ALTERNATIVE_EXERCISES_KEY);
-    return json ? JSON.parse(json) : {};
+    const snap = await getDoc(getSettingsRef(uid));
+    return snap.exists() ? (snap.data().customAlternatives ?? {}) : {};
   } catch {
     return {};
   }
 }
 
-export async function saveCustomAlternatives(data: CustomAlternatives): Promise<void> {
-  await storageSet(ALTERNATIVE_EXERCISES_KEY, JSON.stringify(data));
+export async function saveCustomAlternatives(uid: string, data: CustomAlternatives): Promise<void> {
+  if (!uid) return;
+  await setDoc(getSettingsRef(uid), { customAlternatives: data }, { merge: true });
 }

@@ -22,6 +22,7 @@ import {
 } from '../storage/profileStorage';
 import { RootStackParamList, Workout } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { authService } from '../services/authService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -32,6 +33,8 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
+
+  const currentUser = authService.getCurrentUser();
 
   // #10: 톱니바퀴 아이콘 여백 수정
   useLayoutEffect(() => {
@@ -50,9 +53,10 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadWorkouts().then(setWorkouts);
-      loadProfile().then(setProfile);
-    }, []),
+      if (!currentUser) return;
+      loadWorkouts(currentUser.uid).then(setWorkouts);
+      loadProfile(currentUser.uid).then(setProfile);
+    }, [currentUser]),
   );
 
   const totalWorkouts = workouts.length;
@@ -66,6 +70,7 @@ export default function ProfileScreen() {
   ];
 
   const handleSaveName = async () => {
+    if (!currentUser) return;
     const trimmed = nameInput.trim();
     if (!trimmed) {
       setEditingName(false);
@@ -73,20 +78,22 @@ export default function ProfileScreen() {
     }
     const updated = { ...profile, name: trimmed };
     setProfile(updated);
-    await saveProfile(updated);
+    await saveProfile(currentUser.uid, updated);
     setEditingName(false);
   };
 
   const handleGenderSelect = async (gender: 'male' | 'female') => {
+    if (!currentUser) return;
     const updated = { ...profile, gender: profile.gender === gender ? null : gender };
     setProfile(updated);
-    await saveProfile(updated);
+    await saveProfile(currentUser.uid, updated);
   };
 
   const handleBodyInfoChange = async (field: 'height' | 'weight', value: string) => {
+    if (!currentUser) return;
     const updated = { ...profile, [field]: value };
     setProfile(updated);
-    await saveProfile(updated);
+    await saveProfile(currentUser.uid, updated);
   };
 
   const initials = profile.name
@@ -95,6 +102,7 @@ export default function ProfileScreen() {
     .toUpperCase();
 
   const handlePickPhoto = async () => {
+    if (!currentUser) return;
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -115,7 +123,7 @@ export default function ProfileScreen() {
           : asset.uri;
         const updated = { ...profile, photoUri: uri };
         setProfile(updated);
-        await saveProfile(updated);
+        await saveProfile(currentUser.uid, updated);
       }
     } catch {
       Alert.alert('오류', '사진을 불러오는 데 실패했습니다.');

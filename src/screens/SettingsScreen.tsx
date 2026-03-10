@@ -28,6 +28,7 @@ import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { formatSeconds } from '../utils/timeFormat';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { authService } from '../services/authService';
+import { useWorkout } from '../context/WorkoutContext';
 
 // ── 상수 ────────────────────────────────────────────────────
 const REST_SNAP_VALUES = [30, 60, 90, 120, 150, 180];
@@ -225,6 +226,8 @@ const HOUR_CHIP_WIDTH = 58; // paddingH(20) + minWidth(52) + marginRight(6) ≈ 
 // ── 메인 화면 ────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, settings: themeSettings, updateSettings: updateTheme } = useTheme();
+  const { endWorkout } = useWorkout();
+  const currentUser = authService.getCurrentUser();
 
   const dayScrollRef = useRef<ScrollView>(null);
   const nightScrollRef = useRef<ScrollView>(null);
@@ -249,25 +252,32 @@ export default function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([loadRestTime(), loadAlarmSettings(), loadExerciseRestTimes()]).then(
+      if (!currentUser) return;
+      Promise.all([
+        loadRestTime(currentUser.uid), 
+        loadAlarmSettings(currentUser.uid), 
+        loadExerciseRestTimes(currentUser.uid)
+      ]).then(
         ([rt, alarm, exTimes]) => {
           setRestTime(rt);
           setAlarmSettings(alarm);
           setExerciseRestTimes(exTimes);
         },
       );
-    }, []),
+    }, [currentUser]),
   );
 
   const handleRestTime = async (sec: number) => {
+    if (!currentUser) return;
     setRestTime(sec);
-    await saveRestTime(sec);
+    await saveRestTime(currentUser.uid, sec);
   };
 
   const updateAlarm = async (patch: Partial<AlarmSettings>) => {
+    if (!currentUser) return;
     const updated = { ...alarmSettings, ...patch };
     setAlarmSettings(updated);
-    await saveAlarmSettings(updated);
+    await saveAlarmSettings(currentUser.uid, updated);
   };
 
   const handleVibrationPattern = async (pattern: VibrationPattern) => {
@@ -277,6 +287,7 @@ export default function SettingsScreen() {
   };
 
   const handleExerciseRestTime = async (exerciseId: string, sec: number | null) => {
+    if (!currentUser) return;
     const updated = { ...exerciseRestTimes };
     if (sec === null) {
       delete updated[exerciseId];
@@ -284,7 +295,7 @@ export default function SettingsScreen() {
       updated[exerciseId] = sec;
     }
     setExerciseRestTimes(updated);
-    await saveExerciseRestTime(exerciseId, sec);
+    await saveExerciseRestTime(currentUser.uid, exerciseId, sec);
   };
 
   const handleLogout = () => {
@@ -303,6 +314,7 @@ export default function SettingsScreen() {
         style: 'destructive', 
         onPress: async () => {
           try {
+            endWorkout();
             await authService.signOut();
           } catch (error) {
             Alert.alert('오류', '로그아웃 중 문제가 발생했습니다.');

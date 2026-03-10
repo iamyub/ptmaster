@@ -30,6 +30,7 @@ import { RootStackParamList, Workout } from '../types';
 import { loadWorkouts, deleteWorkout } from '../storage/workoutStorage';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
+import { authService } from '../services/authService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'daily' | 'weekly' | 'monthly';
@@ -53,10 +54,14 @@ export default function HistoryScreen() {
   const isMedium = width >= 400;
   const extraBottomPad = activeWorkout ? MINI_BAR_HEIGHT : 0;
 
+  const currentUser = authService.getCurrentUser();
+
   useFocusEffect(
     useCallback(() => {
-      loadWorkouts().then(setWorkouts);
-    }, []),
+      if (currentUser) {
+        loadWorkouts(currentUser.uid).then(setWorkouts);
+      }
+    }, [currentUser]),
   );
 
   const workoutsByDate = useMemo(() => {
@@ -72,6 +77,7 @@ export default function HistoryScreen() {
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
 
   const handleDelete = (id: string, title: string) => {
+    if (!currentUser) return;
     showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
@@ -79,7 +85,7 @@ export default function HistoryScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteWorkout(id);
+            await deleteWorkout(currentUser.uid, id);
             setWorkouts((prev) => prev.filter((w) => w.id !== id));
           } catch {
             showAlert('오류', '운동 기록 삭제에 실패했습니다.');

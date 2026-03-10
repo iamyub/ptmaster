@@ -10,433 +10,42 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
-  useWindowDimensions,
-  Animated,
-  PanResponder,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
-import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { Routine, RoutineExercise, RoutineSet, RootStackParamList, Exercise, ExerciseCategory } from '../types';
-import { loadRoutines, addRoutine, updateRoutine, deleteRoutine } from '../storage/routineStorage';
-import { DEFAULT_EXERCISES, CATEGORY_LABELS } from '../utils/exercises';
+import { RootStackParamList, Routine, RoutineExercise, RoutineSet, Exercise } from '../types';
+import { loadRoutines, saveRoutines, addRoutine, updateRoutine, deleteRoutine } from '../storage/routineStorage';
+import { DEFAULT_EXERCISES } from '../utils/exercises';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
-import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
+import { authService } from '../services/authService';
 
-type Route = RouteProp<RootStackParamList, 'ManageRoutines'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Route = RouteProp<RootStackParamList, 'ManageRoutines'>;
+
+type FormMode = 'add' | 'edit';
 
 function generateId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-type FormMode = 'add' | 'edit';
-
-// ── Exercise picker modal (for small screens) ─────────────────
-function ExercisePickerModal({
-  visible,
-  alreadySelected,
-  onAdd,
-  onClose,
-}: {
-  visible: boolean;
-  alreadySelected: string[];
-  onAdd: (exerciseId: string, sets: RoutineSet[]) => void;
-  onClose: () => void;
-}) {
-  const { colors } = useTheme();
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<ExerciseCategory | 'all'>('all');
-  const [step, setStep] = useState<'list' | 'config'>('list');
-  const [pickedExercise, setPickedExercise] = useState<Exercise | null>(null);
-  const [setCount, setSetCount] = useState(3);
-  const [weight, setWeight] = useState(0);
-  const [reps, setReps] = useState(10);
-
-  useEffect(() => {
-    if (!visible) {
-      setStep('list');
-      setPickedExercise(null);
-      setSearch('');
-      setSetCount(3);
-      setWeight(0);
-      setReps(10);
-    }
-  }, [visible]);
-
-  const categories: Array<{ key: ExerciseCategory | 'all'; label: string }> = [
-    { key: 'all', label: '전체' },
-    ...Object.entries(CATEGORY_LABELS).map(([k, v]) => ({
-      key: k as ExerciseCategory,
-      label: v,
-    })),
-  ];
-
-  const filtered = DEFAULT_EXERCISES.filter((e) => {
-    const matchSearch = e.name.includes(search.trim());
-    const matchCategory = activeCategory === 'all' || e.category === activeCategory;
-    return matchSearch && matchCategory;
-  });
-
-  const handlePickExercise = (ex: Exercise) => {
-    setPickedExercise(ex);
-    setSetCount(3);
-    setWeight(0);
-    setReps(10);
-    setStep('config');
-  };
-
-  const handleConfirmAdd = () => {
-    if (!pickedExercise) return;
-    const sets: RoutineSet[] = Array.from({ length: setCount }, () => ({ weight, reps }));
-    onAdd(pickedExercise.id, sets);
-    setStep('list');
-    setPickedExercise(null);
-    setSearch('');
-    setSetCount(3);
-    setWeight(0);
-    setReps(10);
-  };
-
-  const handleClose = () => {
-    setStep('list');
-    setPickedExercise(null);
-    setSearch('');
-    onClose();
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={handleClose}
-      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
-    >
-      <KeyboardAvoidingView
-        style={[mStyles.modalContainer, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={[mStyles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          {step === 'config' ? (
-            <TouchableOpacity onPress={() => setStep('list')} style={mStyles.modalBackBtn}>
-              <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 36 }} />
-          )}
-          <Text style={[mStyles.modalTitle, { color: colors.text }]}>
-            {step === 'list' ? '운동 선택' : '기본값 설정'}
-          </Text>
-          <TouchableOpacity onPress={handleClose} style={mStyles.modalCloseBtn}>
-            <Ionicons name="close" size={22} color={colors.textSub} />
-          </TouchableOpacity>
-        </View>
-
-        {step === 'list' ? (
-          <>
-            <View style={[mStyles.searchBar, { backgroundColor: colors.card }]}>
-              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-              <TextInput
-                style={[mStyles.searchInput, { color: colors.text }]}
-                value={search}
-                onChangeText={setSearch}
-                placeholder="운동 이름 검색"
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="search"
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')}>
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={mStyles.categoryScroll}
-              contentContainerStyle={mStyles.categoryScrollContent}
-            >
-              {categories.map((cat) => {
-                const active = activeCategory === cat.key;
-                return (
-                  <TouchableOpacity
-                    key={cat.key}
-                    style={[mStyles.categoryChip, { backgroundColor: active ? colors.primary : colors.chipBg }]}
-                    onPress={() => setActiveCategory(cat.key)}
-                  >
-                    <Text style={[mStyles.categoryChipText, { color: active ? '#fff' : colors.textSub }]}>
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <FlatList
-              data={filtered}
-              keyExtractor={(e) => e.id}
-              contentContainerStyle={mStyles.pickerList}
-              renderItem={({ item }) => {
-                const isAlready = alreadySelected.includes(item.id);
-                return (
-                  <TouchableOpacity
-                    style={[
-                      mStyles.pickerRow,
-                      { backgroundColor: colors.card },
-                      isAlready && mStyles.pickerRowDisabled,
-                    ]}
-                    onPress={() => !isAlready && handlePickExercise(item)}
-                    activeOpacity={isAlready ? 1 : 0.7}
-                  >
-                    <View style={mStyles.pickerRowLeft}>
-                      <Text style={[mStyles.pickerRowName, { color: isAlready ? colors.textMuted : colors.text }]}>
-                        {item.name}
-                      </Text>
-                      <Text style={[mStyles.pickerRowMuscle, { color: colors.textSub }]}>
-                        {[item.equipment, item.description].filter(Boolean).join(' · ')}
-                      </Text>
-                    </View>
-                    {isAlready ? (
-                      <View style={[mStyles.alreadyBadge, { backgroundColor: colors.primaryBg }]}>
-                        <Text style={[mStyles.alreadyBadgeText, { color: colors.primary }]}>추가됨</Text>
-                      </View>
-                    ) : (
-                      <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <Text style={[mStyles.pickerEmpty, { color: colors.textMuted }]}>검색 결과가 없어요.</Text>
-              }
-            />
-          </>
-        ) : (
-          <ScrollView contentContainerStyle={mStyles.configContent}>
-            <View style={[mStyles.configExerciseHeader, { backgroundColor: colors.card }]}>
-              <Text style={[mStyles.configExerciseName, { color: colors.text }]}>{pickedExercise?.name}</Text>
-              <Text style={[mStyles.configExerciseMuscle, { color: colors.textSub }]}>
-                {[pickedExercise?.equipment, pickedExercise?.description].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
-
-            <View style={[mStyles.configCard, { backgroundColor: colors.card }]}>
-              <View style={mStyles.configRow}>
-                <Text style={[mStyles.configLabel, { color: colors.text }]}>세트 수</Text>
-                <View style={[mStyles.configStepper, { backgroundColor: colors.chipBg }]}>
-                  <TouchableOpacity
-                    style={[mStyles.configStepBtn, { backgroundColor: colors.border }]}
-                    onPress={() => setSetCount((v) => Math.max(1, v - 1))}
-                  >
-                    <Text style={[mStyles.configStepBtnText, { color: colors.primary }]}>−</Text>
-                  </TouchableOpacity>
-                  <Text style={[mStyles.configStepValue, { color: colors.text }]}>{setCount}</Text>
-                  <TouchableOpacity
-                    style={[mStyles.configStepBtn, { backgroundColor: colors.border }]}
-                    onPress={() => setSetCount((v) => Math.min(10, v + 1))}
-                  >
-                    <Text style={[mStyles.configStepBtnText, { color: colors.primary }]}>+</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={mStyles.configRow}>
-                <Text style={[mStyles.configLabel, { color: colors.text }]}>기본 무게 (kg)</Text>
-                <View style={mStyles.configStepperWide}>
-                  <SetStepper value={weight} onChange={setWeight} step={5} />
-                </View>
-              </View>
-
-              <View style={mStyles.configRow}>
-                <Text style={[mStyles.configLabel, { color: colors.text }]}>기본 횟수</Text>
-                <View style={mStyles.configStepperWide}>
-                  <SetStepper value={reps} onChange={setReps} step={1} min={1} />
-                </View>
-              </View>
-            </View>
-
-            <View style={[mStyles.previewCard, { backgroundColor: colors.primaryBg }]}>
-              <Text style={[mStyles.previewTitle, { color: colors.primary }]}>추가될 세트 미리보기</Text>
-              {Array.from({ length: setCount }, (_, i) => (
-                <View key={i} style={mStyles.previewRow}>
-                  <Text style={[mStyles.previewSetNum, { color: colors.textSub }]}>{i + 1}세트</Text>
-                  <Text style={[mStyles.previewSetInfo, { color: colors.text }]}>
-                    {weight}kg × {reps}회
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity style={mStyles.confirmAddBtn} onPress={handleConfirmAdd}>
-              <Ionicons name="add-circle" size={20} color="#fff" />
-              <Text style={mStyles.confirmAddBtnText}>루틴에 추가하기</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ── Inline exercise picker panel (for large screens) ──────────
-function InlineExercisePicker({
-  alreadySelected,
-  onAdd,
-  colors,
-}: {
-  alreadySelected: string[];
-  onAdd: (exerciseId: string) => void;
-  colors: any;
-}) {
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<ExerciseCategory | 'all'>('all');
-
-  const categories: Array<{ key: ExerciseCategory | 'all'; label: string }> = [
-    { key: 'all', label: '전체' },
-    ...Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ key: k as ExerciseCategory, label: v })),
-  ];
-
-  const filtered = DEFAULT_EXERCISES.filter((e) => {
-    const matchSearch = e.name.includes(search.trim());
-    const matchCategory = activeCategory === 'all' || e.category === activeCategory;
-    return matchSearch && matchCategory;
-  });
-
-  return (
-    <View style={[inlineStyles.container, { backgroundColor: colors.background, borderRightColor: colors.border }]}>
-      <Text style={[inlineStyles.panelTitle, { color: colors.textSub }]}>운동 추가</Text>
-
-      <View style={[inlineStyles.searchBar, { backgroundColor: colors.card }]}>
-        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-        <TextInput
-          style={[inlineStyles.searchInput, { color: colors.text }]}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="운동 검색"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ height: 40 }}
-        contentContainerStyle={{ flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, gap: 6, alignItems: 'center' }}
-      >
-        {categories.map((cat) => {
-          const active = activeCategory === cat.key;
-          return (
-            <TouchableOpacity
-              key={cat.key}
-              style={[inlineStyles.chip, { backgroundColor: active ? colors.primary : colors.chipBg }]}
-              onPress={() => setActiveCategory(cat.key)}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '500', color: active ? '#fff' : colors.textSub }}>
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      <FlatList
-        data={filtered}
-        keyExtractor={(e) => e.id}
-        contentContainerStyle={{ padding: 12 }}
-        renderItem={({ item }) => {
-          const isAlready = alreadySelected.includes(item.id);
-          return (
-            <TouchableOpacity
-              style={[
-                inlineStyles.exerciseRow,
-                { backgroundColor: colors.card, opacity: isAlready ? 0.5 : 1 },
-              ]}
-              onPress={() => !isAlready && onAdd(item.id)}
-              activeOpacity={isAlready ? 1 : 0.7}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{item.name}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSub, marginTop: 2 }}>
-                  {[item.equipment, item.description].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-              {isAlready ? (
-                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-              ) : (
-                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={{ textAlign: 'center', color: colors.textMuted, paddingVertical: 20, fontSize: 13 }}>
-            검색 결과가 없어요.
-          </Text>
-        }
-      />
-    </View>
-  );
-}
-
-const inlineStyles = StyleSheet.create({
-  container: {
-    width: 300,
-    borderRightWidth: 1,
-    paddingTop: 12,
-  },
-  panelTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    margin: 12,
-    marginTop: 0,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  searchInput: { flex: 1, fontSize: 14 },
-  chip: { paddingHorizontal: 12, height: 28, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  exerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 6,
-  },
-});
-
-// ── Main screen ───────────────────────────────────────────────
 export default function ManageRoutinesScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
-  const { colors } = useTheme();
-  const { activeWorkout } = useWorkout();
-  const paramRoutineId = route.params?.routineId;
-  const paramOpenForm = route.params?.openForm;
+  const insets = useSafeAreaInsets();
 
-  const { width } = useWindowDimensions();
-  const isLarge = width >= 600;
-  const extraBottomPad = activeWorkout ? MINI_BAR_HEIGHT : 0;
+  const currentUser = authService.getCurrentUser();
 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
-  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
-  const [routineName, setRoutineName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
   const [formExercises, setFormExercises] = useState<RoutineExercise[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -445,255 +54,130 @@ export default function ManageRoutinesScreen() {
   const skipUnsavedCheckRef = useRef(false);
   const handleSaveRef = useRef<() => Promise<void>>(async () => {});
   const handleGoBackRef = useRef(() => { navigation.goBack(); });
-  const formModeRef = useRef(formMode);
-  const routineNameRef = useRef(routineName);
-  const formExercisesRef = useRef(formExercises);
 
-  useEffect(() => { formModeRef.current = formMode; }, [formMode]);
-  useEffect(() => { routineNameRef.current = routineName; }, [routineName]);
-  useEffect(() => { formExercisesRef.current = formExercises; }, [formExercises]);
-
-  useLayoutEffect(() => {
-    let title = '루틴 관리';
-    if (formMode === 'edit' && editingRoutine) title = editingRoutine.name;
-    else if (formMode === 'add') title = '새 루틴 추가';
-
-    navigation.setOptions({
-      title,
-      headerBackTitle: '메인 화면',
-      headerLeft: formMode !== null ? () => (
-        <TouchableOpacity
-          onPress={() => handleGoBackRef.current()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 16 }}
-          style={{ flexDirection: 'row', alignItems: 'center' }}
-        >
-          <Ionicons name="chevron-back" size={28} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 17 }}>메인 화면</Text>
-        </TouchableOpacity>
-      ) : undefined,
-    });
-  }, [navigation, formMode, editingRoutine, colors.primary]);
+  useEffect(() => {
+    handleGoBackRef.current = () => {
+      if (formMode) {
+        setFormMode(null);
+        setEditingId(null);
+      } else {
+        navigation.goBack();
+      }
+    };
+  }, [formMode, navigation]);
 
   useFocusEffect(
     useCallback(() => {
-      loadRoutines().then(setRoutines);
-    }, []),
+      if (currentUser) {
+        loadRoutines(currentUser.uid).then(setRoutines);
+      }
+    }, [currentUser]),
   );
 
-  useEffect(() => {
-    if (paramRoutineId && routines.length > 0) {
-      const target = routines.find((r) => r.id === paramRoutineId);
-      if (target) openEditForm(target);
+  // Deep comparison check for unsaved changes
+  const hasChanges = useCallback(() => {
+    if (!initialStateRef.current) return false;
+    if (formName !== initialStateRef.current.name) return true;
+    if (formExercises.length !== initialStateRef.current.exercises.length) return true;
+    for (let i = 0; i < formExercises.length; i++) {
+      const a = formExercises[i];
+      const b = initialStateRef.current.exercises[i];
+      if (a.exerciseId !== b.exerciseId) return true;
+      if (a.sets.length !== b.sets.length) return true;
+      for (let j = 0; j < a.sets.length; j++) {
+        if (a.sets[j].weight !== b.sets[j].weight) return true;
+        if (a.sets[j].reps !== b.sets[j].reps) return true;
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramRoutineId, routines]);
-
-  useEffect(() => {
-    if (paramOpenForm) openAddForm();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramOpenForm]);
-
-  // swipe 제스처용 beforeRemove 리스너 (커스텀 버튼과 중복 없음)
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (formModeRef.current === null) return;
-      if (skipUnsavedCheckRef.current) return;
-      const initial = initialStateRef.current;
-      if (!initial) return;
-      const hasChanges =
-        routineNameRef.current !== initial.name ||
-        JSON.stringify(formExercisesRef.current) !== JSON.stringify(initial.exercises);
-      if (!hasChanges) return;
-      e.preventDefault();
-      showAlert(
-        '저장하지 않은 변경사항이 있어요',
-        '',
-        [
-          {
-            text: '저장',
-            onPress: () => {
-              handleSaveRef.current().then(() => {
-                // handleSave 내부에서 goBack 처리하므로 별도 dispatch 불필요
-              });
-            },
-          },
-          {
-            text: '저장 안함',
-            style: 'destructive',
-            onPress: () => {
-              skipUnsavedCheckRef.current = true;
-              navigation.dispatch(e.data.action);
-            },
-          },
-        ],
-      );
-    });
-    return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation]);
+    return false;
+  }, [formName, formExercises]);
 
   const openAddForm = () => {
-    setEditingRoutine(null);
-    setRoutineName('');
-    setFormExercises([]);
     setFormMode('add');
+    setEditingId(null);
+    setFormName('');
+    setFormExercises([]);
     initialStateRef.current = { name: '', exercises: [] };
-    skipUnsavedCheckRef.current = false;
   };
 
   const openEditForm = (routine: Routine) => {
-    setEditingRoutine(routine);
-    setRoutineName(routine.name);
-    const exercises = routine.exercises.map((re) => ({ ...re, sets: re.sets.map((s) => ({ ...s })) }));
-    setFormExercises(exercises);
     setFormMode('edit');
-    initialStateRef.current = { name: routine.name, exercises };
-    skipUnsavedCheckRef.current = false;
+    setEditingId(routine.id);
+    setFormName(routine.name);
+    const cloned = routine.exercises.map(ex => ({
+      ...ex,
+      sets: ex.sets.map(s => ({ ...s }))
+    }));
+    setFormExercises(cloned);
+    initialStateRef.current = { name: routine.name, exercises: cloned };
   };
 
-  const closeForm = () => {
-    setFormMode(null);
-    setEditingRoutine(null);
-    setRoutineName('');
-    setFormExercises([]);
-  };
+  useEffect(() => {
+    if (route.params?.openForm) {
+      openAddForm();
+      navigation.setParams({ openForm: undefined });
+    } else if (route.params?.routineId) {
+      const routine = routines.find(r => r.id === route.params?.routineId);
+      if (routine) {
+        openEditForm(routine);
+      }
+      navigation.setParams({ routineId: undefined });
+    }
+  }, [route.params, routines]);
 
-  const handleAddExercise = (exerciseId: string, sets: RoutineSet[]) => {
-    setFormExercises((prev) => [...prev, { exerciseId, sets }]);
-    setPickerVisible(false);
+  const handleClose = () => {
+    if (hasChanges()) {
+      showAlert('알림', '변경사항이 저장되지 않았습니다. 정말 닫으시겠습니까?', [
+        { text: '계속 수정', style: 'cancel' },
+        { text: '닫기', style: 'destructive', onPress: () => setFormMode(null) },
+      ]);
+    } else {
+      setFormMode(null);
+    }
   };
-
-  // For inline picker: add with defaults (3 sets, 0kg, 10 reps)
-  const handleAddExerciseInline = (exerciseId: string) => {
-    if (formExercises.some((re) => re.exerciseId === exerciseId)) return;
-    const sets: RoutineSet[] = Array.from({ length: 3 }, () => ({ weight: 0, reps: 10 }));
-    setFormExercises((prev) => [...prev, { exerciseId, sets }]);
-  };
-
-  const removeExercise = (exerciseId: string) => {
-    setFormExercises((prev) => prev.filter((re) => re.exerciseId !== exerciseId));
-  };
-
-  const addFormSet = (exerciseId: string) => {
-    setFormExercises((prev) =>
-      prev.map((re) => {
-        if (re.exerciseId !== exerciseId) return re;
-        const last = re.sets[re.sets.length - 1] ?? { weight: 0, reps: 0 };
-        return { ...re, sets: [...re.sets, { weight: last.weight, reps: last.reps }] };
-      }),
-    );
-  };
-
-  const removeFormSet = (exerciseId: string, setIdx: number) => {
-    setFormExercises((prev) =>
-      prev.map((re) => {
-        if (re.exerciseId !== exerciseId || re.sets.length <= 1) return re;
-        return { ...re, sets: re.sets.filter((_, i) => i !== setIdx) };
-      }),
-    );
-  };
-
-  const updateFormSet = (
-    exerciseId: string,
-    setIdx: number,
-    field: keyof RoutineSet,
-    value: number,
-  ) => {
-    setFormExercises((prev) =>
-      prev.map((re) => {
-        if (re.exerciseId !== exerciseId) return re;
-        return {
-          ...re,
-          sets: re.sets.map((s, i) => (i === setIdx ? { ...s, [field]: value } : s)),
-        };
-      }),
-    );
-  };
-
-  // formExercises order is manual (user-draggable), no alphabetic sort
-  const sortedFormExercises = formExercises;
 
   const handleSave = async () => {
-    if (formExercises.length === 0) {
-      showAlert('알림', '운동을 하나 이상 추가해주세요.');
+    if (!currentUser) return;
+    if (!formName.trim()) {
+      showAlert('알림', '루틴 이름을 입력해주세요.');
       return;
     }
-    const finalName = routineName.trim() || '새 루틴';
+    if (formExercises.length === 0) {
+      showAlert('알림', '최소 하나의 운동을 추가해주세요.');
+      return;
+    }
+
+    const routine: Routine = {
+      id: editingId || generateId(),
+      name: formName.trim(),
+      exercises: formExercises,
+    };
+
     try {
       if (formMode === 'add') {
-        const newRoutine: Routine = {
-          id: generateId(),
-          name: finalName,
-          exercises: formExercises,
-        };
-        await addRoutine(newRoutine);
-        setRoutines((prev) => [...prev, newRoutine]);
-      } else if (formMode === 'edit' && editingRoutine) {
-        const updated: Routine = {
-          ...editingRoutine,
-          name: finalName,
-          exercises: formExercises,
-        };
-        await updateRoutine(updated);
-        setRoutines((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        await addRoutine(currentUser.uid, routine);
+      } else {
+        await updateRoutine(currentUser.uid, routine);
       }
-      skipUnsavedCheckRef.current = true;
-      closeForm();
-      navigation.goBack();
+      const updated = await loadRoutines(currentUser.uid);
+      setRoutines(updated);
+      setFormMode(null);
     } catch {
       showAlert('오류', '루틴 저장에 실패했습니다.');
     }
   };
-  handleSaveRef.current = handleSave;
-
-  const handleGoBack = () => {
-    if (formModeRef.current === null) {
-      navigation.goBack();
-      return;
-    }
-    const initial = initialStateRef.current;
-    const hasChanges = initial && (
-      routineNameRef.current !== initial.name ||
-      JSON.stringify(formExercisesRef.current) !== JSON.stringify(initial.exercises)
-    );
-    if (!hasChanges) {
-      navigation.goBack();
-      return;
-    }
-    // Alert를 먼저 표시 — 이 시점에는 navigation이 아직 시작되지 않음
-    showAlert(
-      '저장하지 않은 변경사항이 있어요',
-      '',
-      [
-        {
-          text: '저장',
-          onPress: () => { handleSaveRef.current(); },
-        },
-        {
-          text: '저장 안함',
-          style: 'destructive',
-          onPress: () => {
-            skipUnsavedCheckRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ],
-    );
-    // ← 여기에 navigation.goBack() 없음
-  };
-  handleGoBackRef.current = handleGoBack;
 
   const handleDelete = (id: string, name: string) => {
-    showAlert('루틴 삭제', `"${name}"를 삭제할까요?`, [
+    if (!currentUser) return;
+    showAlert('루틴 삭제', `"${name}" 루틴을 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteRoutine(id);
-            setRoutines((prev) => prev.filter((r) => r.id !== id));
-            if (editingRoutine?.id === id) closeForm();
+            await deleteRoutine(currentUser.uid, id);
+            setRoutines(prev => prev.filter(r => r.id !== id));
           } catch {
             showAlert('오류', '루틴 삭제에 실패했습니다.');
           }
@@ -702,36 +186,70 @@ export default function ManageRoutinesScreen() {
     ]);
   };
 
-  const alreadySelectedIds = formExercises.map((re) => re.exerciseId);
+  const addExercise = (exerciseId: string) => {
+    if (formExercises.some(re => re.exerciseId === exerciseId)) {
+      showAlert('알림', '이미 추가된 운동입니다.');
+      return;
+    }
+    setFormExercises(prev => [...prev, { exerciseId, sets: [{ weight: 0, reps: 0 }] }]);
+    setPickerVisible(false);
+  };
 
-  // ── Form content (shared between layouts) ──
+  const removeExercise = (exerciseId: string) => {
+    setFormExercises(prev => prev.filter(re => re.exerciseId !== exerciseId));
+  };
+
+  const addFormSet = (exerciseId: string) => {
+    setFormExercises(prev => prev.map(re => {
+      if (re.exerciseId !== exerciseId) return re;
+      const last = re.sets[re.sets.length - 1];
+      return { ...re, sets: [...re.sets, { weight: last?.weight ?? 0, reps: last?.reps ?? 0 }] };
+    }));
+  };
+
+  const removeFormSet = (exerciseId: string, setIdx: number) => {
+    setFormExercises(prev => prev.map(re => {
+      if (re.exerciseId !== exerciseId || re.sets.length <= 1) return re;
+      return { ...re, sets: re.sets.filter((_, i) => i !== setIdx) };
+    }));
+  };
+
+  const updateFormSet = (exerciseId: string, setIdx: number, field: keyof RoutineSet, value: number) => {
+    setFormExercises(prev => prev.map(re => {
+      if (re.exerciseId !== exerciseId) return re;
+      return {
+        ...re,
+        sets: re.sets.map((s, i) => i === setIdx ? { ...s, [field]: value } : s),
+      };
+    }));
+  };
+
+  const sortedFormExercises = formExercises;
+
+  const isLarge = width >= 600;
+  const { width } = useWindowDimensions();
+  const hPad = isLarge ? 24 : 16;
+  const extraBottomPad = insets.bottom;
+
   const renderFormContent = () => (
-    <>
-      {/* Routine name */}
-      <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.formLabel, { color: colors.textSub }]}>루틴 이름</Text>
+    <View style={styles.formContainer}>
+      <View style={[styles.formHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
-          style={[styles.nameInput, { backgroundColor: colors.inputBg, color: colors.text }]}
-          value={routineName}
-          onChangeText={setRoutineName}
-          placeholder="루틴 이름 (예: 가슴·어깨 데이)"
+          style={[styles.formNameInput, { color: colors.text }]}
+          value={formName}
+          onChangeText={setFormName}
+          placeholder="루틴 이름 (예: 가슴/삼두, 오운완)"
           placeholderTextColor={colors.textMuted}
           autoFocus={formMode === 'add'}
         />
       </View>
 
-      <Text style={[styles.exercisesSectionLabel, { color: colors.textSub }]}>
-        추가된 운동{formExercises.length > 0 ? ` (${formExercises.length}종목)` : ''}
-      </Text>
-
-      {sortedFormExercises.length === 0 ? (
-        <View style={[styles.noExerciseBox, { backgroundColor: colors.cardAlt }]}>
-          <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
-          <Text style={[styles.noExerciseText, { color: colors.textMuted }]}>
-            아직 추가된 운동이 없어요.
-          </Text>
+      {formExercises.length === 0 ? (
+        <View style={styles.noExerciseBox}>
+          <Ionicons name="barbell-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.noExerciseText, { color: colors.textSub }]}>추가된 운동이 없어요</Text>
           <Text style={[styles.noExerciseSubText, { color: colors.textMuted }]}>
-            {isLarge ? '왼쪽 패널에서 운동을 선택하세요.' : '아래 버튼으로 운동을 추가해보세요.'}
+            아래 '운동 추가' 버튼을 눌러보세요
           </Text>
         </View>
       ) : (
@@ -831,57 +349,17 @@ export default function ManageRoutinesScreen() {
       {/* Add exercise button (small screens only) */}
       {!isLarge && (
         <TouchableOpacity
-          style={[styles.addExerciseBtn, { borderColor: colors.primary }]}
+          style={[styles.inlineAddBtn, { borderColor: colors.primary }]}
           onPress={() => setPickerVisible(true)}
         >
           <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-          <Text style={[styles.addExerciseBtnText, { color: colors.primary }]}>운동 추가 +</Text>
+          <Text style={[styles.inlineAddBtnText, { color: colors.primary }]}>운동 추가</Text>
         </TouchableOpacity>
       )}
-
-    </>
+    </View>
   );
 
-  // ── Form view ──
-  if (formMode !== null) {
-    if (isLarge) {
-      // 2-column layout: left = exercise picker, right = routine composition
-      return (
-        <View style={[styles.container, { backgroundColor: colors.background, flexDirection: 'row' }]}>
-          <InlineExercisePicker
-            alreadySelected={alreadySelectedIds}
-            onAdd={handleAddExerciseInline}
-            colors={colors}
-          />
-          <View style={{ flex: 1 }}>
-            <NestableScrollContainer
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={[styles.formScrollContent, { paddingBottom: 16 }]}
-            >
-              {renderFormContent()}
-            </NestableScrollContainer>
-            <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: 16 + extraBottomPad }]}>
-              {formMode === 'edit' && editingRoutine && (
-                <TouchableOpacity
-                  style={[styles.deleteRoutineBtn, { backgroundColor: colors.destructiveBg }]}
-                  onPress={() => handleDelete(editingRoutine.id, editingRoutine.name)}
-                >
-                  <Ionicons name="trash-outline" size={17} color={colors.destructive} />
-                  <Text style={[styles.deleteRoutineBtnText, { color: colors.destructive }]}>루틴 삭제</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.confirmBtn, formMode !== 'edit' && { flex: 1 }]}
-                onPress={handleSave}
-              >
-                <Text style={styles.confirmBtnText}>저장</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      );
-    }
-
+  if (formMode) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={{ flex: 1 }}>
@@ -894,495 +372,177 @@ export default function ManageRoutinesScreen() {
             {renderFormContent()}
           </NestableScrollContainer>
           <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: 16 + extraBottomPad }]}>
-            {formMode === 'edit' && editingRoutine && (
-              <TouchableOpacity
-                style={[styles.deleteRoutineBtn, { backgroundColor: colors.destructiveBg }]}
-                onPress={() => handleDelete(editingRoutine.id, editingRoutine.name)}
-              >
-                <Ionicons name="trash-outline" size={17} color={colors.destructive} />
-                <Text style={[styles.deleteRoutineBtnText, { color: colors.destructive }]}>루틴 삭제</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.confirmBtn, formMode !== 'edit' && { flex: 1 }]}
-              onPress={handleSave}
-            >
-              <Text style={styles.confirmBtnText}>저장</Text>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave}>
+              <Text style={styles.saveBtnText}>루틴 저장하기</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <ExercisePickerModal
           visible={pickerVisible}
-          alreadySelected={alreadySelectedIds}
-          onAdd={handleAddExercise}
           onClose={() => setPickerVisible(false)}
+          onSelect={addExercise}
+          colors={colors}
         />
       </View>
     );
   }
 
-  // ── Routine list ──
-  const routinesWithAdd = [{ id: 'ADD_NEW_ROUTINE_BTN' } as any, ...routines];
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={routinesWithAdd}
-        keyExtractor={(item) => item.id}
-        numColumns={isLarge ? 2 : 1}
-        key={isLarge ? 'large' : 'small'}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: 40 + extraBottomPad, padding: isLarge ? 20 : 16 },
-        ]}
-        columnWrapperStyle={isLarge ? { gap: 12 } : undefined}
-        renderItem={({ item }) => {
-          if (item.id === 'ADD_NEW_ROUTINE_BTN') {
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.routineCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderWidth: 2,
-                    borderColor: colors.primary,
-                    borderStyle: 'dashed',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    flex: isLarge ? 1 : undefined,
-                    height: 100,
-                  },
-                ]}
-                onPress={openAddForm}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontWeight: '700', marginTop: 4 }}>
-                  새 루틴 추가
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-          const exerciseNames = item.exercises
-            .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
-            .filter(Boolean)
-            .join(', ');
-          return (
-            <SwipeableRoutineCard
-              item={item}
-              exerciseNames={exerciseNames}
-              isLarge={isLarge}
-              colors={colors}
-              onEdit={() => openEditForm(item)}
-              onDelete={() => handleDelete(item.id, item.name)}
-            />
-          );
-        }}
-      />
+      <ScrollView contentContainerStyle={[styles.listContent, { padding: hPad, paddingBottom: 40 + extraBottomPad }]}>
+        <TouchableOpacity
+          style={[styles.addRoutineCard, { backgroundColor: colors.card, borderColor: colors.primary }]}
+          onPress={openAddForm}
+        >
+          <Ionicons name="add-circle" size={32} color={colors.primary} />
+          <Text style={[styles.addRoutineText, { color: colors.primary }]}>새 루틴 만들기</Text>
+        </TouchableOpacity>
+
+        {routines.map((r) => (
+          <TouchableOpacity
+            key={r.id}
+            style={[styles.routineCard, { backgroundColor: colors.card }]}
+            onPress={() => openEditForm(r)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.routineHeader}>
+              <Text style={[styles.routineName, { color: colors.text }]}>{r.name}</Text>
+              <View style={styles.routineActions}>
+                <TouchableOpacity onPress={() => handleDelete(r.id, r.name)}>
+                  <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.exerciseTags}>
+              {r.exercises.map((re, idx) => {
+                const ex = DEFAULT_EXERCISES.find(e => e.id === re.exerciseId);
+                if (!ex) return null;
+                return (
+                  <View key={idx} style={[styles.tag, { backgroundColor: colors.primaryBg }]}>
+                    <Text style={styles.tagText}>{ex.name}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
-// ── Swipeable routine card ────────────────────────────────────
-const DELETE_BTN_W = 84;
-
-function SwipeableRoutineCard({
-  item,
-  exerciseNames,
-  isLarge,
-  colors,
-  onEdit,
-  onDelete,
-}: {
-  item: Routine;
-  exerciseNames: string;
-  isLarge: boolean;
-  colors: any;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isOpen = useRef(false);
-
-  const close = () => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-    isOpen.current = false;
-  };
-
-  const open = () => {
-    Animated.spring(translateX, { toValue: -DELETE_BTN_W, useNativeDriver: true, bounciness: 4 }).start();
-    isOpen.current = true;
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 6 && Math.abs(gs.dx) > Math.abs(gs.dy),
-      onPanResponderMove: (_, gs) => {
-        const base = isOpen.current ? -DELETE_BTN_W : 0;
-        const x = Math.max(-DELETE_BTN_W, Math.min(0, base + gs.dx));
-        translateX.setValue(x);
-      },
-      onPanResponderRelease: (_, gs) => {
-        const base = isOpen.current ? -DELETE_BTN_W : 0;
-        const projected = base + gs.dx;
-        if (projected < -DELETE_BTN_W / 2) {
-          open();
-        } else {
-          close();
-        }
-      },
-    }),
-  ).current;
-
+// ── Exercise Picker Modal ───────────────────────────────────────
+function ExercisePickerModal({ visible, onClose, onSelect, colors }: any) {
   return (
-    <View style={[swipeStyles.wrapper, { flex: isLarge ? 1 : undefined }]}>
-      {/* 삭제 버튼 (뒤에 깔림) */}
-      <View style={swipeStyles.deleteArea}>
-        <TouchableOpacity
-          style={swipeStyles.deleteBtn}
-          onPress={() => { close(); onDelete(); }}
-          activeOpacity={0.8}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={mStyles.overlay}>
+        <KeyboardAvoidingView
+          style={[mStyles.modalContainer, { backgroundColor: colors.background }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={swipeStyles.deleteBtnText}>삭제</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 카드 (위에 오버레이) */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-        <TouchableOpacity
-          style={[styles.routineCard, { backgroundColor: colors.card, marginBottom: 0 }]}
-          onPress={() => { if (isOpen.current) { close(); } else { onEdit(); } }}
-          activeOpacity={0.85}
-        >
-          <View style={styles.routineLeft}>
-            <Text style={[styles.routineName, { color: colors.text, fontSize: isLarge ? 17 : 16 }]}>
-              {item.name}
-            </Text>
-            <Text style={[styles.routineExercises, { color: colors.textSub }]} numberOfLines={2}>
-              {exerciseNames}
-            </Text>
-            <Text style={[styles.routineCount, { color: colors.primary }]}>
-              {item.exercises.length}종목
-            </Text>
+          <View style={[mStyles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <Text style={[mStyles.modalTitle, { color: colors.text }]}>운동 선택</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.textSub} />
+            </TouchableOpacity>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+          <ScrollView style={mStyles.modalList}>
+            {DEFAULT_EXERCISES.map((ex) => (
+              <TouchableOpacity
+                key={ex.id}
+                style={[mStyles.modalItem, { borderBottomColor: colors.border }]}
+                onPress={() => onSelect(ex.id)}
+              >
+                <Text style={[mStyles.modalItemName, { color: colors.text }]}>{ex.name}</Text>
+                <Text style={[mStyles.modalItemSub, { color: colors.textSub }]}>{ex.category}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
-
-const swipeStyles = StyleSheet.create({
-  wrapper: {
-    marginBottom: 12,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  deleteArea: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: DELETE_BTN_W,
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteBtn: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  deleteBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-});
-
-// ── Styles ────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-
-  listContent: { padding: 16, paddingBottom: 100 },
-  emptyBox: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 16 },
-  emptySubText: { fontSize: 13 },
-
-  routineCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  routineLeft: { flex: 1, marginRight: 12 },
-  routineName: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  routineExercises: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
-  routineCount: { fontSize: 12, fontWeight: '600' },
-
-  addButton: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: '#4F8EF7',
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#4F8EF7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  addButtonText: { fontSize: 17, fontWeight: '700', color: '#fff' },
-
-  formScrollContent: { padding: 16, paddingBottom: 40 },
-
-  formCard: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  formLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  nameInput: { borderRadius: 10, padding: 12, fontSize: 16, fontWeight: '600' },
-
-  exercisesSectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10,
-    marginLeft: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  noExerciseBox: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    gap: 8,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  noExerciseText: { fontSize: 14 },
-  noExerciseSubText: { fontSize: 12 },
-
-  formExerciseBlock: {
-    marginBottom: 12,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    overflow: 'hidden',
-  },
-  formExerciseBlockDragging: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    elevation: 14,
-  },
-  formExerciseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  dragHandle: { paddingHorizontal: 2, paddingVertical: 4 },
-  formExerciseInfo: { flex: 1 },
-  formExerciseName: { fontSize: 15, fontWeight: '700' },
-  formExerciseMuscle: { fontSize: 11, marginTop: 2 },
-
-  setEditor: { paddingHorizontal: 10, paddingBottom: 10 },
-  setEditorHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  setEditorHeaderNum: { width: 28, fontSize: 10, textAlign: 'center' },
-  setEditorHeaderLabel: { flex: 1, fontSize: 10, textAlign: 'center' },
-  setEditorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  setEditorNum: { width: 28, textAlign: 'center', fontSize: 12, fontWeight: '700' },
-  setEditorDeleteBtn: { width: 28, alignItems: 'center', marginLeft: 4 },
-  addSetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-    paddingVertical: 4,
-  },
-  addSetText: { fontSize: 13, fontWeight: '500' },
-
-  addExerciseBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  addExerciseBtnText: { fontSize: 15, fontWeight: '600' },
-
-  deleteRoutineBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 12,
-    padding: 14,
-  },
-  deleteRoutineBtnText: { fontSize: 15, fontWeight: '600' },
-
-  bottomBar: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  confirmBtn: {
-    flex: 2,
-    backgroundColor: '#4F8EF7',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  confirmBtnText: { fontSize: 15, color: '#fff', fontWeight: '700' },
-});
 
 const mStyles = StyleSheet.create({
-  modalContainer: { flex: 1 },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '700' },
-  modalBackBtn: { padding: 4, width: 36 },
-  modalCloseBtn: { padding: 4, width: 36, alignItems: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContainer: { height: '80%', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 18, fontWeight: '700' },
+  modalList: { flex: 1 },
+  modalItem: { padding: 16, borderBottomWidth: 1 },
+  modalItemName: { fontSize: 16, fontWeight: '600' },
+  modalItemSub: { fontSize: 13, marginTop: 2 },
+});
 
-  searchBar: {
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  listContent: { gap: 16 },
+  addRoutineCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
-    margin: 12,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  addRoutineText: { fontSize: 16, fontWeight: '700' },
+  routineCard: {
+    padding: 18,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  routineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  routineName: { fontSize: 18, fontWeight: '700' },
+  routineActions: { flexDirection: 'row', gap: 16 },
+  exerciseTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  tagText: { fontSize: 12, color: '#4F8EF7', fontWeight: '600' },
+
+  // Form styles
+  formScrollContent: { flexGrow: 1 },
+  formContainer: { flex: 1 },
+  formHeader: { padding: 16, borderBottomWidth: 1, marginBottom: 16 },
+  formNameInput: { fontSize: 20, fontWeight: '700', padding: 4 },
+  noExerciseBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 10 },
+  noExerciseText: { fontSize: 16, fontWeight: '600' },
+  noExerciseSubText: { fontSize: 13 },
+  formExerciseBlock: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 14,
+    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
   },
-  searchInput: { flex: 1, fontSize: 15 },
-
-  categoryScroll: { height: 44 },
-  categoryScrollContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    gap: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  categoryChip: { paddingHorizontal: 14, height: 32, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  categoryChipText: { fontSize: 13, fontWeight: '500' },
-
-  pickerList: { padding: 12 },
-  pickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  pickerRowDisabled: { opacity: 0.5 },
-  pickerRowLeft: { flex: 1 },
-  pickerRowName: { fontSize: 15, fontWeight: '600' },
-  pickerRowMuscle: { fontSize: 12, marginTop: 2 },
-  alreadyBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  alreadyBadgeText: { fontSize: 12, fontWeight: '600' },
-  pickerEmpty: { textAlign: 'center', paddingVertical: 40, fontSize: 14 },
-
-  configContent: { padding: 16, paddingBottom: 40 },
-  configExerciseHeader: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  configExerciseName: { fontSize: 20, fontWeight: '700' },
-  configExerciseMuscle: { fontSize: 13, marginTop: 4 },
-
-  configCard: {
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  configRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  configLabel: { fontSize: 15, fontWeight: '500' },
-  configStepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, overflow: 'hidden' },
-  configStepBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  configStepBtnText: { fontSize: 20, fontWeight: '700' },
-  configStepValue: { width: 40, textAlign: 'center', fontSize: 16, fontWeight: '700' },
-  configStepperWide: { width: 150 },
-
-  previewCard: { borderRadius: 12, padding: 14, marginBottom: 20 },
-  previewTitle: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
-  previewRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  previewSetNum: { fontSize: 14, fontWeight: '600' },
-  previewSetInfo: { fontSize: 14 },
-
-  confirmAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#4F8EF7',
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#4F8EF7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  confirmAddBtnText: { fontSize: 16, color: '#fff', fontWeight: '700' },
+  formExerciseBlockDragging: { elevation: 10, shadowOpacity: 0.2, shadowRadius: 10 },
+  formExerciseHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  formExerciseInfo: { flex: 1 },
+  formExerciseName: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
+  formExerciseMuscle: { fontSize: 12 },
+  setEditor: {},
+  setEditorHeader: { flexDirection: 'row', marginBottom: 8, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  setEditorHeaderNum: { width: 30, textAlign: 'center', fontSize: 11 },
+  setEditorHeaderLabel: { flex: 1, textAlign: 'center', fontSize: 11 },
+  setEditorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  setEditorNum: { width: 30, textAlign: 'center', fontSize: 14, fontWeight: '700' },
+  setEditorDeleteBtn: { width: 30, alignItems: 'center' },
+  addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, alignSelf: 'flex-start' },
+  addSetText: { fontSize: 14, fontWeight: '600' },
+  inlineAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, margin: 16, padding: 16, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed' },
+  inlineAddBtnText: { fontSize: 15, fontWeight: '600' },
+  bottomBar: { padding: 16, borderTopWidth: 1 },
+  saveBtn: { padding: 18, borderRadius: 16, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

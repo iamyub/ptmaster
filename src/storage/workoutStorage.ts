@@ -1,37 +1,64 @@
+import { 
+  collection, 
+  getDocs, 
+  setDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  orderBy,
+  getDoc
+} from 'firebase/firestore';
+import { db } from '../config/firebaseConfig';
 import { Workout } from '../types';
-import { storageGet, storageSet } from '../utils/storage';
 
-const WORKOUTS_KEY = '@ptmaster_workouts';
+/**
+ * 유저별 운동 기록 컬렉션 참조 반환
+ */
+function getWorkoutsRef(uid: string) {
+  return collection(db, 'users', uid, 'workouts');
+}
 
-export async function loadWorkouts(): Promise<Workout[]> {
+export async function loadWorkouts(uid: string): Promise<Workout[]> {
+  if (!uid) return [];
   try {
-    const json = await storageGet(WORKOUTS_KEY);
-    return json ? JSON.parse(json) : [];
-  } catch {
+    const q = query(getWorkoutsRef(uid), orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Workout);
+  } catch (error) {
+    console.error('Error loading workouts:', error);
     return [];
   }
 }
 
-export async function saveWorkouts(workouts: Workout[]): Promise<void> {
-  await storageSet(WORKOUTS_KEY, JSON.stringify(workouts));
-}
-
-export async function addWorkout(workout: Workout): Promise<void> {
-  const workouts = await loadWorkouts();
-  workouts.unshift(workout);
-  await saveWorkouts(workouts);
-}
-
-export async function updateWorkout(updated: Workout): Promise<void> {
-  const workouts = await loadWorkouts();
-  const idx = workouts.findIndex((w) => w.id === updated.id);
-  if (idx !== -1) {
-    workouts[idx] = updated;
-    await saveWorkouts(workouts);
+export async function addWorkout(uid: string, workout: Workout): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'workouts', workout.id);
+    await setDoc(docRef, workout);
+  } catch (error) {
+    console.error('Error adding workout:', error);
+    throw error;
   }
 }
 
-export async function deleteWorkout(id: string): Promise<void> {
-  const workouts = await loadWorkouts();
-  await saveWorkouts(workouts.filter((w) => w.id !== id));
+export async function updateWorkout(uid: string, updated: Workout): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'workouts', updated.id);
+    await setDoc(docRef, updated, { merge: true });
+  } catch (error) {
+    console.error('Error updating workout:', error);
+    throw error;
+  }
+}
+
+export async function deleteWorkout(uid: string, id: string): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'workouts', id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error('Error deleting workout:', error);
+    throw error;
+  }
 }

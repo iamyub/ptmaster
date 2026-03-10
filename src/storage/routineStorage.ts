@@ -1,51 +1,60 @@
+import { 
+  collection, 
+  getDocs, 
+  setDoc, 
+  deleteDoc, 
+  doc 
+} from 'firebase/firestore';
+import { db } from '../config/firebaseConfig';
 import { Routine } from '../types';
-import { storageGet, storageSet } from '../utils/storage';
 
-const ROUTINES_KEY = '@ptmaster_routines';
-
-/** 구버전(exerciseIds: string[]) → 신버전(exercises: RoutineExercise[]) 마이그레이션 */
-function migrate(raw: any): Routine {
-  if (raw.exercises && Array.isArray(raw.exercises)) return raw as Routine;
-  return {
-    id: raw.id,
-    name: raw.name,
-    exercises: (raw.exerciseIds ?? []).map((id: string) => ({
-      exerciseId: id,
-      sets: [{ weight: 0, reps: 0 }],
-    })),
-  };
+/**
+ * 유저별 루틴 컬렉션 참조 반환
+ */
+function getRoutinesRef(uid: string) {
+  return collection(db, 'users', uid, 'routines');
 }
 
-export async function loadRoutines(): Promise<Routine[]> {
+export async function loadRoutines(uid: string): Promise<Routine[]> {
+  if (!uid) return [];
   try {
-    const json = await storageGet(ROUTINES_KEY);
-    const raw: any[] = json ? JSON.parse(json) : [];
-    return raw.map(migrate);
-  } catch {
+    const snapshot = await getDocs(getRoutinesRef(uid));
+    return snapshot.docs.map(doc => doc.data() as Routine);
+  } catch (error) {
+    console.error('Error loading routines:', error);
     return [];
   }
 }
 
-export async function saveRoutines(routines: Routine[]): Promise<void> {
-  await storageSet(ROUTINES_KEY, JSON.stringify(routines));
-}
-
-export async function addRoutine(routine: Routine): Promise<void> {
-  const routines = await loadRoutines();
-  routines.push(routine);
-  await saveRoutines(routines);
-}
-
-export async function updateRoutine(updated: Routine): Promise<void> {
-  const routines = await loadRoutines();
-  const idx = routines.findIndex((r) => r.id === updated.id);
-  if (idx !== -1) {
-    routines[idx] = updated;
-    await saveRoutines(routines);
+export async function addRoutine(uid: string, routine: Routine): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'routines', routine.id);
+    await setDoc(docRef, routine);
+  } catch (error) {
+    console.error('Error adding routine:', error);
+    throw error;
   }
 }
 
-export async function deleteRoutine(id: string): Promise<void> {
-  const routines = await loadRoutines();
-  await saveRoutines(routines.filter((r) => r.id !== id));
+export async function updateRoutine(uid: string, updated: Routine): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'routines', updated.id);
+    await setDoc(docRef, updated, { merge: true });
+  } catch (error) {
+    console.error('Error updating routine:', error);
+    throw error;
+  }
+}
+
+export async function deleteRoutine(uid: string, id: string): Promise<void> {
+  if (!uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'routines', id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error('Error deleting routine:', error);
+    throw error;
+  }
 }

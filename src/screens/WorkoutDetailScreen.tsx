@@ -39,6 +39,7 @@ import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout } from '../context/WorkoutContext';
 import { isWorkoutExpired } from '../utils/workoutUtils';
+import { authService } from '../services/authService';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -86,6 +87,9 @@ export default function WorkoutDetailScreen() {
     isWorkoutRunning,
     setWorkoutRunning,
   } = useWorkout();
+
+  // ── Auth ──
+  const currentUser = authService.getCurrentUser();
 
   // ── State ──
   const [workout, setWorkout] = useState<Workout | null>(null);
@@ -142,8 +146,9 @@ export default function WorkoutDetailScreen() {
   // ── Load workout ──
   useFocusEffect(
     useCallback(() => {
+      if (!currentUser) return;
       isInitializedRef.current = false; // reset before reload so auto-save doesn't fire mid-load
-      loadWorkouts().then((all) => {
+      loadWorkouts(currentUser.uid).then((all) => {
         const found = all.find((w) => w.id === workoutId);
         if (found) {
           setWorkout(found);
@@ -164,18 +169,18 @@ export default function WorkoutDetailScreen() {
           }, 100);
         }
       });
-    }, [workoutId, isLarge]),
+    }, [workoutId, isLarge, currentUser]),
   );
 
   // ── Debounced auto-save ──
   useEffect(() => {
-    if (!isInitializedRef.current) return;
+    if (!isInitializedRef.current || !currentUser) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       if (!workoutRef.current) return;
       try {
         const updated: Workout = { ...workoutRef.current, exercises: editedExercises };
-        await updateWorkout(updated);
+        await updateWorkout(currentUser.uid, updated);
         setWorkout(updated);
       } catch {
         // silent fail
@@ -184,7 +189,7 @@ export default function WorkoutDetailScreen() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [editedExercises]);
+  }, [editedExercises, currentUser]);
 
   // ── Progress ──
   const totalSets = editedExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -291,11 +296,11 @@ export default function WorkoutDetailScreen() {
         true, // force init this one as active
       );
     }
-    if (isExpired && workout) {
+    if (isExpired && workout && currentUser) {
       const today = new Date().toISOString();
       const updated: Workout = { ...workout, date: today };
       try {
-        await updateWorkout(updated);
+        await updateWorkout(currentUser.uid, updated);
         setWorkout(updated);
         setIsExpired(false);
       } catch {
@@ -427,7 +432,7 @@ export default function WorkoutDetailScreen() {
   };
 
   const handleDelete = () => {
-    if (!workout) return;
+    if (!workout || !currentUser) return;
     showAlert('운동 삭제', `"${workout.title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
@@ -435,7 +440,7 @@ export default function WorkoutDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteWorkout(workoutId);
+            await deleteWorkout(currentUser.uid, workoutId);
             endWorkout();
             navigation.goBack();
           } catch {

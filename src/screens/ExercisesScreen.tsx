@@ -24,6 +24,7 @@ import {
 } from '../storage/settingsStorage';
 import { useTheme } from '../context/ThemeContext';
 import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
+import { authService } from '../services/authService';
 
 const CATEGORIES: { key: ExerciseCategory | 'all'; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -58,6 +59,8 @@ export default function ExercisesScreen() {
   const [customAlternatives, setCustomAlternatives] = useState<CustomAlternatives>({});
   const [modalExercise, setModalExercise] = useState<Exercise | null>(null);
 
+  const currentUser = authService.getCurrentUser();
+
   const { width } = useWindowDimensions();
   const isLarge = width >= 600;
   const extraBottomPad = activeWorkout ? MINI_BAR_HEIGHT : 0;
@@ -66,16 +69,21 @@ export default function ExercisesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([loadExerciseRestTimes(), loadCustomAlternatives()]).then(
+      if (!currentUser) return;
+      Promise.all([
+        loadExerciseRestTimes(currentUser.uid), 
+        loadCustomAlternatives(currentUser.uid)
+      ]).then(
         ([rt, ca]) => {
           setExerciseRestTimes(rt);
           setCustomAlternatives(ca);
         },
       );
-    }, []),
+    }, [currentUser]),
   );
 
   const handleSelectRestTime = async (exerciseId: string, sec: number | null) => {
+    if (!currentUser) return;
     const updated = { ...exerciseRestTimes };
     if (sec === null) {
       delete updated[exerciseId];
@@ -83,7 +91,7 @@ export default function ExercisesScreen() {
       updated[exerciseId] = sec;
     }
     setExerciseRestTimes(updated);
-    await saveExerciseRestTime(exerciseId, sec);
+    await saveExerciseRestTime(currentUser.uid, exerciseId, sec);
     setExpandedId(null);
   };
 
@@ -93,22 +101,24 @@ export default function ExercisesScreen() {
   };
 
   const handleAddAlternative = async (exerciseId: string, altId: string) => {
+    if (!currentUser) return;
     const ex = DEFAULT_EXERCISES.find((e) => e.id === exerciseId);
     if (!ex) return;
     const current = getAlternativeIds(ex);
     if (current.includes(altId)) return;
     const updated = { ...customAlternatives, [exerciseId]: [...current, altId] };
     setCustomAlternatives(updated);
-    await saveCustomAlternatives(updated);
+    await saveCustomAlternatives(currentUser.uid, updated);
   };
 
   const handleRemoveAlternative = async (exerciseId: string, altId: string) => {
+    if (!currentUser) return;
     const ex = DEFAULT_EXERCISES.find((e) => e.id === exerciseId);
     if (!ex) return;
     const current = getAlternativeIds(ex);
     const updated = { ...customAlternatives, [exerciseId]: current.filter((id) => id !== altId) };
     setCustomAlternatives(updated);
-    await saveCustomAlternatives(updated);
+    await saveCustomAlternatives(currentUser.uid, updated);
   };
 
   const filtered = DEFAULT_EXERCISES.filter((e) => {
