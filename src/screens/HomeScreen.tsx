@@ -313,78 +313,81 @@ export default function HomeScreen() {
             내 루틴
           </Text>
           <View style={styles.sectionActions}>
-            <TouchableOpacity
-              style={[styles.sectionPlusBtn, { backgroundColor: colors.primaryBg }]}
-              onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
-            >
-              <Ionicons name="add" size={20} color="#4F8EF7" />
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('ManageRoutines', {})}>
               <Text style={styles.sectionAction}>관리</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {routines.length === 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.routineRow}
+        >
+          {routines.map((r) => {
+            const names = r.exercises
+              .slice(0, 3)
+              .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
+              .filter(Boolean)
+              .join(', ');
+            return (
+              <TouchableOpacity
+                key={r.id}
+                style={[
+                  styles.routineCard,
+                  { backgroundColor: colors.card, width: isLarge ? 180 : 150 },
+                ]}
+                onPress={() => navigation.navigate('ManageRoutines', { routineId: r.id })}
+                activeOpacity={0.9}
+              >
+                <View style={[styles.routineIconCircle, { backgroundColor: colors.primaryBg }]}>
+                  <Ionicons name="barbell-outline" size={isLarge ? 24 : 20} color="#4F8EF7" />
+                </View>
+                <Text
+                  style={[styles.routineCardName, { color: colors.text, fontSize: isLarge ? 15 : 14 }]}
+                  numberOfLines={1}
+                >
+                  {r.name}
+                </Text>
+                <Text
+                  style={[styles.routineCardExercises, { color: colors.textSub }]}
+                  numberOfLines={2}
+                >
+                  {names}
+                  {r.exercises.length > 3 ? ` 외 ${r.exercises.length - 3}개` : ''}
+                </Text>
+                <TouchableOpacity
+                  style={styles.routineStartBtn}
+                  onPress={() => handleStartRoutine(r)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.routineStartText}>시작하기</Text>
+                  <Ionicons name="arrow-forward" size={13} color="#fff" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
           <TouchableOpacity
-            style={[styles.emptyRoutineBox, { backgroundColor: colors.primaryBg }]}
+            style={[
+              styles.routineCard,
+              {
+                backgroundColor: colors.card,
+                width: isLarge ? 180 : 150,
+                borderWidth: 1.5,
+                borderColor: '#4F8EF7',
+                borderStyle: 'dashed',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 6,
+              },
+            ]}
             onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
             activeOpacity={0.8}
           >
-            <Ionicons name="add-circle-outline" size={24} color="#4F8EF7" />
-            <Text style={styles.emptyRoutineText}>루틴을 추가해 빠르게 시작하세요</Text>
+            <Ionicons name="add-circle-outline" size={28} color="#4F8EF7" />
+            <Text style={{ color: '#4F8EF7', fontWeight: '700', fontSize: 13 }}>루틴 추가</Text>
           </TouchableOpacity>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.routineRow}
-          >
-            {routines.map((r) => {
-              const names = r.exercises
-                .slice(0, 3)
-                .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
-                .filter(Boolean)
-                .join(', ');
-              return (
-                <TouchableOpacity
-                  key={r.id}
-                  style={[
-                    styles.routineCard,
-                    { backgroundColor: colors.card, width: isLarge ? 180 : 150 },
-                  ]}
-                  onPress={() => navigation.navigate('ManageRoutines', { routineId: r.id })}
-                  activeOpacity={0.9}
-                >
-                  <View style={[styles.routineIconCircle, { backgroundColor: colors.primaryBg }]}>
-                    <Ionicons name="barbell-outline" size={isLarge ? 24 : 20} color="#4F8EF7" />
-                  </View>
-                  <Text
-                    style={[styles.routineCardName, { color: colors.text, fontSize: isLarge ? 15 : 14 }]}
-                    numberOfLines={1}
-                  >
-                    {r.name}
-                  </Text>
-                  <Text
-                    style={[styles.routineCardExercises, { color: colors.textSub }]}
-                    numberOfLines={2}
-                  >
-                    {names}
-                    {r.exercises.length > 3 ? ` 외 ${r.exercises.length - 3}개` : ''}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.routineStartBtn}
-                    onPress={() => handleStartRoutine(r)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.routineStartText}>시작하기</Text>
-                    <Ionicons name="arrow-forward" size={13} color="#fff" />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
+        </ScrollView>
       </View>
 
       {/* 최근 운동 섹션 */}

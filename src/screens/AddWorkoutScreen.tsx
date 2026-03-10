@@ -6,7 +6,10 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from 'react-native';
+import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -156,8 +159,10 @@ export default function AddWorkoutScreen() {
     );
   };
 
-  const removeExercise = (exIdx: number) => {
-    setExercises((prev) => prev.filter((_, i) => i !== exIdx));
+  const updateExerciseNote = (exIdx: number, text: string) => {
+    setExercises((prev) =>
+      prev.map((ex, i) => (i === exIdx ? { ...ex, notes: text } : ex)),
+    );
   };
 
   const handleSave = async () => {
@@ -190,7 +195,7 @@ export default function AddWorkoutScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextInput
           style={[styles.titleInput, { backgroundColor: colors.card, color: colors.text }]}
           value={title}
@@ -211,69 +216,98 @@ export default function AddWorkoutScreen() {
           />
         </View>
 
-        {exercises.map((ex, exIdx) => {
-          const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
-          const hasPrev = lastSets.length > 0 && !routineExercises;
-          return (
-            <View key={ex.id} style={[styles.exerciseBlock, { backgroundColor: colors.card }]}>
-              <View style={styles.exerciseHeader}>
-                <View style={styles.exerciseTitleArea}>
-                  <Text style={[styles.exerciseName, { color: colors.text }]}>{ex.exercise.name}</Text>
-                  {hasPrev && (
-                    <Text style={styles.prevHint}>
-                      이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity onPress={() => removeExercise(exIdx)}>
-                  <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
-                </TouchableOpacity>
-              </View>
-
-              {/* 세트 헤더 */}
-              <View style={styles.setHeader}>
-                <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
-                <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
-                <View style={styles.setHeaderSep} />
-                <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
-                <View style={{ width: 28 }} />
-              </View>
-
-              {ex.sets.map((s, setIdx) => (
-                <View key={s.id} style={styles.setRow}>
-                  <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
-                  <SetStepper
-                    value={s.weight}
-                    onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
-                    step={5}
-                  />
-                  <View style={styles.setColGap} />
-                  <SetStepper
-                    value={s.reps}
-                    onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
-                    step={1}
-                  />
+        <NestableDraggableFlatList
+          data={exercises}
+          keyExtractor={(item) => item.id}
+          onDragEnd={({ data }) => setExercises(data)}
+          renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
+            const exIdx = exercises.findIndex((e) => e.id === ex.id);
+            const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
+            const hasPrev = lastSets.length > 0 && !routineExercises;
+            return (
+              <View style={[styles.exerciseBlock, { backgroundColor: colors.card }, isActive && styles.exerciseBlockDragging]}>
+                <View style={styles.exerciseHeader}>
                   <TouchableOpacity
-                    style={styles.setDeleteBtn}
-                    onPress={() => removeSet(exIdx, setIdx)}
-                    disabled={ex.sets.length <= 1}
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                      drag();
+                    }}
+                    delayLongPress={250}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.dragHandle}
                   >
-                    <Ionicons
-                      name="remove-circle-outline"
-                      size={20}
-                      color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
-                    />
+                    <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  <View style={styles.exerciseTitleArea}>
+                    <Text style={[styles.exerciseName, { color: colors.text }]}>{ex.exercise.name}</Text>
+                    {hasPrev && (
+                      <Text style={styles.prevHint}>
+                        이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => removeExercise(exIdx)}>
+                    <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
                   </TouchableOpacity>
                 </View>
-              ))}
 
-              <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
-                <Ionicons name="add" size={16} color="#4F8EF7" />
-                <Text style={styles.addSetText}>세트 추가</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
+                {/* 세트 헤더 */}
+                <View style={styles.setHeader}>
+                  <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                  <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
+                  <View style={styles.setHeaderSep} />
+                  <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
+                  <View style={{ width: 28 }} />
+                </View>
+
+                {ex.sets.map((s, setIdx) => (
+                  <View key={s.id} style={styles.setRow}>
+                    <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
+                    <SetStepper
+                      value={s.weight}
+                      onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
+                      step={5}
+                    />
+                    <View style={styles.setColGap} />
+                    <SetStepper
+                      value={s.reps}
+                      onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
+                      step={1}
+                    />
+                    <TouchableOpacity
+                      style={styles.setDeleteBtn}
+                      onPress={() => removeSet(exIdx, setIdx)}
+                      disabled={ex.sets.length <= 1}
+                    >
+                      <Ionicons
+                        name="remove-circle-outline"
+                        size={20}
+                        color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
+                  <Ionicons name="add" size={16} color="#4F8EF7" />
+                  <Text style={styles.addSetText}>세트 추가</Text>
+                </TouchableOpacity>
+
+                <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
+                  <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
+                  <TextInput
+                    style={[styles.exNoteInput, { color: colors.text }]}
+                    value={ex.notes || ''}
+                    onChangeText={(text) => updateExerciseNote(exIdx, text)}
+                    placeholder="운동 메모..."
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                  />
+                </View>
+              </View>
+            );
+          }}
+        />
 
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity
@@ -337,12 +371,17 @@ export default function AddWorkoutScreen() {
         </View>
       )}
 
-      {showRoutinePicker && (
+      <Modal
+        visible={showRoutinePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRoutinePicker(false)}
+      >
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
             <View style={styles.pickerHeader}>
               <Text style={[styles.pickerTitle, { color: colors.text }]}>루틴 선택</Text>
-              <TouchableOpacity onPress={() => setShowRoutinePicker(false)}>
+              <TouchableOpacity onPress={() => setShowRoutinePicker(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={colors.textSub} />
               </TouchableOpacity>
             </View>
@@ -368,7 +407,7 @@ export default function AddWorkoutScreen() {
             </ScrollView>
           </View>
         </View>
-      )}
+      </Modal>
 
       <TouchableOpacity
         style={[styles.saveButton, saving && { opacity: 0.6 }]}
@@ -424,12 +463,20 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
+  exerciseBlockDragging: {
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
+    opacity: 0.8,
+  },
   exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  dragHandle: { paddingRight: 8, paddingTop: 2 },
   exerciseTitleArea: { flex: 1, marginRight: 8 },
   exerciseName: { fontSize: 16, fontWeight: '700', color: '#1A1A2E' },
   prevHint: { fontSize: 12, color: '#4F8EF7', marginTop: 2 },
@@ -453,6 +500,21 @@ const styles = StyleSheet.create({
   setDeleteBtn: { width: 28, alignItems: 'center', marginLeft: 4 },
   addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   addSetText: { fontSize: 14, color: '#4F8EF7', fontWeight: '500' },
+  exNoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  exNoteInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingTop: 0,
+    paddingBottom: 0,
+    minHeight: 20,
+  },
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 12,

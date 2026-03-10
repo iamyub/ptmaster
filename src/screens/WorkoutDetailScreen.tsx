@@ -249,7 +249,11 @@ export default function WorkoutDetailScreen() {
     return Math.ceil(totalSec / 60);
   }, [editedExercises, exerciseRestTimes, defaultRestTime]);
 
-  // ── Handlers ──
+  const updateExerciseNote = (exId: string, text: string) => {
+    setEditedExercises((prev) =>
+      prev.map((ex) => (ex.id === exId ? { ...ex, notes: text } : ex)),
+    );
+  };
 
   const handlePauseWorkout = () => {
     skipTimer();
@@ -427,12 +431,15 @@ export default function WorkoutDetailScreen() {
         <View style={styles.exerciseCardHeader}>
           {drag && (
             <TouchableOpacity
-              onLongPress={drag}
-              delayLongPress={200}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                drag();
+              }}
+              delayLongPress={250}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={styles.dragHandle}
             >
-              <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           )}
           <View style={styles.exerciseCardHeaderLeft}>
@@ -542,6 +549,19 @@ export default function WorkoutDetailScreen() {
           <Ionicons name="add-circle-outline" size={16} color={isWorkoutPaused ? '#ccc' : '#4F8EF7'} />
           <Text style={[styles.addSetText, isWorkoutPaused && { color: '#ccc' }]}>세트 추가</Text>
         </TouchableOpacity>
+
+        {/* 운동별 메모 */}
+        <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
+          <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
+          <TextInput
+            style={[styles.exNoteInput, { color: colors.text }]}
+            value={ex.notes || ''}
+            onChangeText={(text) => updateExerciseNote(ex.id, text)}
+            placeholder="운동 메모..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+        </View>
       </View>
     );
   };
@@ -695,7 +715,7 @@ export default function WorkoutDetailScreen() {
           <View
             style={[styles.leftColumn, { backgroundColor: colors.card, borderRightColor: colors.border }]}
           >
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <NestableScrollContainer contentContainerStyle={{ padding: 16 }}>
               {headerCard}
               {workout.notes && (
                 <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
@@ -705,41 +725,52 @@ export default function WorkoutDetailScreen() {
               )}
               {progressCard}
 
-              <Text style={[styles.sidebarSectionLabel, { color: colors.textMuted }]}>운동 종목</Text>
-              {editedExercises.map((ex) => {
-                const exDone = ex.sets.filter((s) => s.completed).length;
-                const isSelected = ex.id === selectedEx?.id;
-                return (
-                  <TouchableOpacity
-                    key={ex.id}
-                    style={[
-                      styles.sidebarItem,
-                      {
-                        backgroundColor: isSelected ? colors.primaryBg : colors.background,
-                        borderColor: isSelected ? '#4F8EF7' : 'transparent',
-                      },
-                    ]}
-                    onPress={() => setSelectedExId(ex.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
-                        numberOfLines={1}
-                      >
-                        {displayName(ex.exercise)}
-                      </Text>
-                      <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
-                        {exDone}/{ex.sets.length} 세트
-                      </Text>
-                    </View>
-                    {exDone === ex.sets.length && ex.sets.length > 0 && (
-                      <Ionicons name="checkmark-circle" size={18} color="#34C759" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+              <Text style={[styles.sidebarSectionLabel, { color: colors.textMuted }]}>운동 종목 (드래그하여 순서 변경)</Text>
+              <NestableDraggableFlatList
+                data={editedExercises}
+                keyExtractor={(ex) => ex.id}
+                onDragEnd={({ data }) => setEditedExercises(data)}
+                renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
+                  const exDone = ex.sets.filter((s) => s.completed).length;
+                  const isSelected = ex.id === selectedEx?.id;
+                  return (
+                    <TouchableOpacity
+                      key={ex.id}
+                      style={[
+                        styles.sidebarItem,
+                        {
+                          backgroundColor: isActive ? colors.primaryBg : isSelected ? colors.primaryBg : colors.background,
+                          borderColor: isSelected ? '#4F8EF7' : 'transparent',
+                          opacity: isActive ? 0.7 : 1,
+                        },
+                      ]}
+                      onPress={() => setSelectedExId(ex.id)}
+                      onLongPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                        drag();
+                      }}
+                      delayLongPress={250}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {displayName(ex.exercise)}
+                        </Text>
+                        <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
+                          {exDone}/{ex.sets.length} 세트
+                        </Text>
+                      </View>
+                      {exDone === ex.sets.length && ex.sets.length > 0 && (
+                        <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </NestableScrollContainer>
           </View>
 
           {/* Right column */}
@@ -1284,6 +1315,22 @@ const styles = StyleSheet.create({
     marginTop: 8, paddingVertical: 6, alignSelf: 'flex-start',
   },
   addSetText: { fontSize: 14, color: '#4F8EF7', fontWeight: '600' },
+  exNoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  exNoteInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingTop: 0,
+    paddingBottom: 0,
+    minHeight: 20,
+    textAlignVertical: 'top',
+  },
 
   actionButtonsWrap: { marginTop: 4 },
   addExerciseButton: {
