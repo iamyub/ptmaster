@@ -156,11 +156,11 @@ function MainTabs({
   const isLarge = width >= 600;
   const isMedium = width >= 400;
 
-  const iconSize = isLarge ? 26 : 22;
-  const labelSize = isLarge ? 13 : 11;
-  const tabBarHeight = isLarge ? 80 : 74;
+  const iconSize = isLarge ? 24 : 20;
+  const labelSize = isLarge ? 12 : 10;
+  const tabBarHeight = isLarge ? 64 : 58;
   const totalTabBarHeight = tabBarHeight + insets.bottom + (activeWorkout && isWorkoutRunning ? MINI_BAR_HEIGHT : 0);
-  const paddingBottom = (isLarge ? 12 : 10) + insets.bottom;
+  const paddingBottom = (isLarge ? 6 : 4) + insets.bottom;
 
   return (
     <View style={{ flex: 1 }}>

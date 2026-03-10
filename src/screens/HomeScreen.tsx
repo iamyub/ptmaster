@@ -293,16 +293,18 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      <TouchableOpacity
-        style={styles.startButton}
-        onPress={() => navigation.navigate('AddWorkout', {})}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add-circle-outline" size={isLarge ? 32 : 28} color="#fff" />
-        <Text style={[styles.startButtonText, { fontSize: isLarge ? 19 : 17 }]}>
-          오늘 운동 시작하기
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.startArea}>
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={() => navigation.navigate('AddWorkout', {})}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="barbell-outline" size={isLarge ? 48 : 40} color="#fff" />
+          <Text style={[styles.startButtonText, { fontSize: isLarge ? 17 : 15 }]}>
+            오늘 운동{"\n"}시작하기
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* 루틴 섹션 */}
       <View style={styles.section}>
@@ -409,25 +411,34 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingBottom: 40 },
-  header: { marginBottom: 24 },
+  header: { marginBottom: 20 },
   greeting: { fontSize: 26, fontWeight: '800', lineHeight: 34 },
   date: { fontSize: 14, marginTop: 4 },
-  startButton: {
-    flexDirection: 'row',
+  startArea: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4F8EF7',
-    borderRadius: 16,
-    paddingVertical: 18,
-    gap: 10,
-    marginBottom: 32,
-    shadowColor: '#4F8EF7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 40,
   },
-  startButtonText: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  startButton: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: '#4F8EF7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4F8EF7',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  startButtonText: {
+    fontWeight: '800',
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
   section: { marginBottom: 28 },
   sectionHeader: {
     flexDirection: 'row',

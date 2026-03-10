@@ -13,9 +13,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet } from '../types';
+import { RootStackParamList, Workout, WorkoutExercise, WorkoutSet, Routine } from '../types';
 import { DEFAULT_EXERCISES } from '../utils/exercises';
 import { addWorkout, loadWorkouts } from '../storage/workoutStorage';
+import { loadRoutines } from '../storage/routineStorage';
 import SetStepper from '../components/SetStepper';
 import { useTheme } from '../context/ThemeContext';
 
@@ -54,12 +55,15 @@ export default function AddWorkoutScreen() {
   const [notes, setNotes] = useState('');
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showRoutinePicker, setShowRoutinePicker] = useState(false);
+  const [routines, setRoutines] = useState<Routine[]>([]);
   const [saving, setSaving] = useState(false);
   const [pastWorkouts, setPastWorkouts] = useState<Workout[]>([]);
 
-  // 과거 운동 기록 로드
+  // 과거 운동 기록 및 루틴 로드
   useEffect(() => {
     loadWorkouts().then(setPastWorkouts);
+    loadRoutines().then(setRoutines);
   }, []);
 
   // 루틴에서 진입: 루틴 preset 세트로 즉시 초기화 (history 불필요)
@@ -90,6 +94,26 @@ export default function AddWorkoutScreen() {
         : [createDefaultSet()];
     setExercises((prev) => [...prev, { id: generateId(), exercise: found, sets }]);
     setShowExercisePicker(false);
+  };
+
+  const applyRoutine = (routine: Routine) => {
+    const newExs = routine.exercises
+      .map((re) => {
+        const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
+        if (!exercise) return null;
+        return {
+          id: generateId(),
+          exercise,
+          sets: re.sets.map((s) => createDefaultSet(s.weight, s.reps)),
+        };
+      })
+      .filter((ex): ex is WorkoutExercise => ex !== null);
+
+    setExercises((prev) => [...prev, ...newExs]);
+    setShowRoutinePicker(false);
+    if (!title || title === format(new Date(), 'M월 d일 운동', { locale: ko })) {
+      setTitle(`${format(new Date(), 'M월 d일', { locale: ko })} - ${routine.name}`);
+    }
   };
 
   const addSet = (exIdx: number) => {
@@ -251,13 +275,23 @@ export default function AddWorkoutScreen() {
           );
         })}
 
-        <TouchableOpacity
-          style={styles.addExerciseBtn}
-          onPress={() => setShowExercisePicker(true)}
-        >
-          <Ionicons name="add-circle-outline" size={20} color="#4F8EF7" />
-          <Text style={styles.addExerciseBtnText}>운동 추가</Text>
-        </TouchableOpacity>
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: colors.primary }]}
+            onPress={() => setShowExercisePicker(true)}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+            <Text style={[styles.actionBtnText, { color: colors.primary }]}>운동 추가</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: '#4F8EF7', backgroundColor: colors.background === '#0D0D1A' ? 'rgba(79,142,247,0.1)' : '#F0F7FF' }]}
+            onPress={() => setShowRoutinePicker(true)}
+          >
+            <Ionicons name="list-outline" size={20} color="#4F8EF7" />
+            <Text style={[styles.actionBtnText, { color: '#4F8EF7' }]}>루틴 추가</Text>
+          </TouchableOpacity>
+        </View>
 
         <TextInput
           style={[styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
@@ -298,6 +332,39 @@ export default function AddWorkoutScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {showRoutinePicker && (
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>루틴 선택</Text>
+              <TouchableOpacity onPress={() => setShowRoutinePicker(false)}>
+                <Ionicons name="close" size={22} color={colors.textSub} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerList}>
+              {routines.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted }}>저장된 루틴이 없어요.</Text>
+                </View>
+              ) : (
+                routines.map((r) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
+                    onPress={() => applyRoutine(r)}
+                  >
+                    <Text style={[styles.pickerItemName, { color: colors.text }]}>{r.name}</Text>
+                    <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
+                      {r.exercises.length}개 종목
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -386,19 +453,23 @@ const styles = StyleSheet.create({
   setDeleteBtn: { width: 28, alignItems: 'center', marginLeft: 4 },
   addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   addSetText: { fontSize: 14, color: '#4F8EF7', fontWeight: '500' },
-  addExerciseBtn: {
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  actionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#4F8EF7',
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     borderRadius: 12,
     padding: 14,
-    marginBottom: 16,
     gap: 8,
   },
-  addExerciseBtnText: { fontSize: 15, color: '#4F8EF7', fontWeight: '600' },
+  actionBtnText: { fontSize: 15, fontWeight: '600' },
   notesInput: {
     backgroundColor: '#fff',
     borderRadius: 12,

@@ -914,28 +914,47 @@ export default function ManageRoutinesScreen() {
   }
 
   // ── Routine list ──
+  const routinesWithAdd = [{ id: 'ADD_NEW_ROUTINE_BTN' } as any, ...routines];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
-        data={routines}
+        data={routinesWithAdd}
         keyExtractor={(item) => item.id}
         numColumns={isLarge ? 2 : 1}
         key={isLarge ? 'large' : 'small'}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: 100 + extraBottomPad, padding: isLarge ? 20 : 16 },
+          { paddingBottom: 40 + extraBottomPad, padding: isLarge ? 20 : 16 },
         ]}
         columnWrapperStyle={isLarge ? { gap: 12 } : undefined}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons name="list-outline" size={48} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textSub }]}>저장된 루틴이 없어요.</Text>
-            <Text style={[styles.emptySubText, { color: colors.textMuted }]}>
-              아래 버튼으로 루틴을 추가해보세요!
-            </Text>
-          </View>
-        }
         renderItem={({ item }) => {
+          if (item.id === 'ADD_NEW_ROUTINE_BTN') {
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.routineCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderWidth: 2,
+                    borderColor: colors.primary,
+                    borderStyle: 'dashed',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flex: isLarge ? 1 : undefined,
+                    height: 100,
+                  },
+                ]}
+                onPress={openAddForm}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: '700', marginTop: 4 }}>
+                  새 루틴 추가
+                </Text>
+              </TouchableOpacity>
+            );
+          }
           const exerciseNames = item.exercises
             .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
             .filter(Boolean)
@@ -952,11 +971,6 @@ export default function ManageRoutinesScreen() {
           );
         }}
       />
-
-      <TouchableOpacity style={[styles.addButton, { bottom: 24 + extraBottomPad }]} onPress={openAddForm}>
-        <Ionicons name="add" size={24} color="#fff" />
-        <Text style={styles.addButtonText}>루틴 추가</Text>
-      </TouchableOpacity>
     </View>
   );
 }
