@@ -9,6 +9,7 @@ import {
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -143,6 +144,7 @@ export default function HomeScreen() {
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [weather, setWeather] = useState<{ name: string; color: string } | null>(null);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
@@ -159,19 +161,38 @@ export default function HomeScreen() {
         setRecentWorkouts(all.slice(0, 5));
       });
       loadRoutines().then(setRoutines);
+      fetchWeather();
     }, [isLarge]),
   );
 
-  const today = format(new Date(), 'M월 d일 (EEEE)', { locale: ko });
+  const fetchWeather = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
 
-  const getWeatherIcon = () => {
-    const day = new Date().getDate();
-    if (day % 4 === 0) return { name: 'sunny', color: '#FFB800' };
-    if (day % 4 === 1) return { name: 'cloudy', color: '#90A4AE' };
-    if (day % 4 === 2) return { name: 'rainy', color: '#4F8EF7' };
-    return { name: 'snow', color: '#B0BEC5' };
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
+      );
+      const data = await response.json();
+      const code = data.current_weather.weathercode;
+
+      // WMO Weather interpretation codes (WW)
+      if (code === 0) setWeather({ name: 'sunny', color: '#FFB800' });
+      else if (code >= 1 && code <= 3) setWeather({ name: 'cloudy', color: '#90A4AE' });
+      else if (code >= 45 && code <= 48) setWeather({ name: 'cloudy', color: '#B0BEC5' });
+      else if (code >= 51 && code <= 67) setWeather({ name: 'rainy', color: '#4F8EF7' });
+      else if (code >= 71 && code <= 86) setWeather({ name: 'snow', color: '#B0BEC5' });
+      else if (code >= 95) setWeather({ name: 'thunderstorm', color: '#FFD600' });
+      else setWeather({ name: 'cloudy', color: '#90A4AE' });
+    } catch {
+      setWeather(null);
+    }
   };
-  const weather = getWeatherIcon();
+
+  const today = format(new Date(), 'M월 d일 (EEEE)', { locale: ko });
 
   const handleDeleteWorkout = (id: string, title: string) => {
     showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
@@ -291,19 +312,31 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* 고정 상단 헤더 */}
-      <View style={[styles.stickyHeader, { 
-        backgroundColor: colors.background, 
-        paddingTop: insets.top + 16,
-        paddingHorizontal: hPad,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border + '40'
-      }]}>
+      <View
+        style={[
+          styles.stickyHeader,
+          {
+            backgroundColor: colors.background,
+            paddingTop: insets.top + 16,
+            paddingHorizontal: hPad,
+            paddingBottom: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border + '40',
+          },
+        ]}
+      >
         <Text style={[styles.greeting, { color: colors.text, fontSize: isLarge ? 28 : 24 }]}>
           {greeting}
         </Text>
         <View style={styles.dateWeatherRow}>
-          <Ionicons name={weather.name as any} size={18} color={weather.color} style={{ marginRight: 6 }} />
+          {weather && (
+            <Ionicons
+              name={weather.name as any}
+              size={18}
+              color={weather.color}
+              style={{ marginRight: 6 }}
+            />
+          )}
           <Text style={[styles.date, { color: colors.textSub, fontSize: isLarge ? 15 : 14 }]}>
             {today}
           </Text>
@@ -312,123 +345,127 @@ export default function HomeScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.content, { padding: hPad, paddingTop: 20, paddingBottom: 40 + extraBottomPad }]}
+        contentContainerStyle={[
+          styles.content,
+          { padding: hPad, paddingTop: 20, paddingBottom: 40 + extraBottomPad },
+        ]}
       >
         <View style={styles.startArea}>
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={() => navigation.navigate('AddWorkout', {})}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="barbell-outline" size={isLarge ? 48 : 40} color="#fff" />
-          <Text style={[styles.startButtonText, { fontSize: isLarge ? 17 : 15 }]}>
-            오늘 운동{"\n"}시작하기
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 루틴 섹션 */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18 }]}>
-            내 루틴
-          </Text>
-          <View style={styles.sectionActions}>
-            <TouchableOpacity onPress={() => navigation.navigate('ManageRoutines', {})}>
-              <Text style={styles.sectionAction}>관리</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.startButton}
+            onPress={() => navigation.navigate('AddWorkout', {})}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="barbell-outline" size={isLarge ? 48 : 40} color="#fff" />
+            <Text style={[styles.startButtonText, { fontSize: isLarge ? 17 : 15 }]}>
+              오늘 운동{"\n"}시작하기
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.routineRow}
-        >
-          <TouchableOpacity
-            style={[
-              styles.routineCard,
-              {
-                backgroundColor: colors.card,
-                width: isLarge ? 180 : 150,
-                borderWidth: 1.5,
-                borderColor: '#4F8EF7',
-                borderStyle: 'dashed',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 6,
-              },
-            ]}
-            onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add-circle-outline" size={28} color="#4F8EF7" />
-            <Text style={{ color: '#4F8EF7', fontWeight: '700', fontSize: 13 }}>루틴 추가</Text>
-          </TouchableOpacity>
-          {routines.map((r) => {
-            const names = r.exercises
-              .slice(0, 3)
-              .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
-              .filter(Boolean)
-              .join(', ');
-            return (
-              <TouchableOpacity
-                key={r.id}
-                style={[
-                  styles.routineCard,
-                  { backgroundColor: colors.card, width: isLarge ? 180 : 150 },
-                ]}
-                onPress={() => navigation.navigate('ManageRoutines', { routineId: r.id })}
-                activeOpacity={0.9}
-              >
-                <View style={[styles.routineIconCircle, { backgroundColor: colors.primaryBg }]}>
-                  <Ionicons name="barbell-outline" size={isLarge ? 24 : 20} color="#4F8EF7" />
-                </View>
-                <Text
-                  style={[styles.routineCardName, { color: colors.text, fontSize: isLarge ? 15 : 14 }]}
-                  numberOfLines={1}
-                >
-                  {r.name}
-                </Text>
-                <Text
-                  style={[styles.routineCardExercises, { color: colors.textSub }]}
-                  numberOfLines={2}
-                >
-                  {names}
-                  {r.exercises.length > 3 ? ` 외 ${r.exercises.length - 3}개` : ''}
-                </Text>
-                <TouchableOpacity
-                  style={styles.routineStartBtn}
-                  onPress={() => handleStartRoutine(r)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.routineStartText}>시작하기</Text>
-                  <Ionicons name="arrow-forward" size={13} color="#fff" />
-                </TouchableOpacity>
+        {/* 루틴 섹션 */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18 }]}>
+              내 루틴
+            </Text>
+            <View style={styles.sectionActions}>
+              <TouchableOpacity onPress={() => navigation.navigate('ManageRoutines', {})}>
+                <Text style={styles.sectionAction}>관리</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+            </View>
+          </View>
 
-      {/* 최근 운동 섹션 */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18, marginBottom: 14 }]}>
-          최근 운동
-        </Text>
-        {renderRecentWorkouts()}
-        {totalWorkouts > 5 && (
-          <TouchableOpacity
-            style={styles.moreButton}
-            onPress={() => (navigation as any).navigate('History')}
-            activeOpacity={0.7}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.routineRow}
           >
-            <Text style={[styles.moreButtonText, { color: colors.primary }]}>더보기</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+            <TouchableOpacity
+              style={[
+                styles.routineCard,
+                {
+                  backgroundColor: colors.card,
+                  width: isLarge ? 180 : 150,
+                  borderWidth: 1.5,
+                  borderColor: '#4F8EF7',
+                  borderStyle: 'dashed',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 6,
+                },
+              ]}
+              onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={28} color="#4F8EF7" />
+              <Text style={{ color: '#4F8EF7', fontWeight: '700', fontSize: 13 }}>루틴 추가</Text>
+            </TouchableOpacity>
+            {routines.map((r) => {
+              const names = r.exercises
+                .slice(0, 3)
+                .map((re) => DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId)?.name)
+                .filter(Boolean)
+                .join(', ');
+              return (
+                <TouchableOpacity
+                  key={r.id}
+                  style={[
+                    styles.routineCard,
+                    { backgroundColor: colors.card, width: isLarge ? 180 : 150 },
+                  ]}
+                  onPress={() => navigation.navigate('ManageRoutines', { routineId: r.id })}
+                  activeOpacity={0.9}
+                >
+                  <View style={[styles.routineIconCircle, { backgroundColor: colors.primaryBg }]}>
+                    <Ionicons name="barbell-outline" size={isLarge ? 24 : 20} color="#4F8EF7" />
+                  </View>
+                  <Text
+                    style={[styles.routineCardName, { color: colors.text, fontSize: isLarge ? 15 : 14 }]}
+                    numberOfLines={1}
+                  >
+                    {r.name}
+                  </Text>
+                  <Text
+                    style={[styles.routineCardExercises, { color: colors.textSub }]}
+                    numberOfLines={2}
+                  >
+                    {names}
+                    {r.exercises.length > 3 ? ` 외 ${r.exercises.length - 3}개` : ''}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.routineStartBtn}
+                    onPress={() => handleStartRoutine(r)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.routineStartText}>시작하기</Text>
+                    <Ionicons name="arrow-forward" size={13} color="#fff" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 최근 운동 섹션 */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: isLarge ? 20 : 18, marginBottom: 14 }]}>
+            최근 운동
+          </Text>
+          {renderRecentWorkouts()}
+          {totalWorkouts > 5 && (
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={() => (navigation as any).navigate('History')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.moreButtonText, { color: colors.primary }]}>더보기</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -444,14 +481,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   header: { marginBottom: 20 },
-  greeting: { fontSize: 26, fontWeight: '800', lineHeight: 34 },
+  greeting: { fontWeight: '800', lineHeight: 34 },
   dateWeatherRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     marginTop: 8,
   },
-  date: { fontSize: 14 },
+  date: { fontWeight: '500' },
   startArea: {
     alignItems: 'center',
     justifyContent: 'center',
