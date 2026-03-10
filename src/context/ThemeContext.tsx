@@ -44,7 +44,7 @@ const LIGHT: ThemeColors = {
   destructive: '#FF5C5C',
   destructiveBg: '#FFF0F0',
   success: '#34C759',
-  timerBg: '#2C3E50',
+  timerBg: '#F8FAFF',
   segmentBg: '#E8EAF0',
   chipBg: '#F0F2F5',
 };

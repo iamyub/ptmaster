@@ -164,6 +164,15 @@ export default function HomeScreen() {
 
   const today = format(new Date(), 'M월 d일 (EEEE)', { locale: ko });
 
+  const getWeatherIcon = () => {
+    const day = new Date().getDate();
+    if (day % 4 === 0) return { name: 'sunny', color: '#FFB800' };
+    if (day % 4 === 1) return { name: 'cloudy', color: '#90A4AE' };
+    if (day % 4 === 2) return { name: 'rainy', color: '#4F8EF7' };
+    return { name: 'snow', color: '#B0BEC5' };
+  };
+  const weather = getWeatherIcon();
+
   const handleDeleteWorkout = (id: string, title: string) => {
     showAlert('운동 삭제', `"${title}"를 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
@@ -280,20 +289,32 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { padding: hPad, paddingTop: insets.top + 16, paddingBottom: 40 + extraBottomPad }]}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.text, fontSize: isLarge ? 26 : 22 }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* 고정 상단 헤더 */}
+      <View style={[styles.stickyHeader, { 
+        backgroundColor: colors.background, 
+        paddingTop: insets.top + 16,
+        paddingHorizontal: hPad,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border + '40'
+      }]}>
+        <Text style={[styles.greeting, { color: colors.text, fontSize: isLarge ? 28 : 24 }]}>
           {greeting}
         </Text>
-        <Text style={[styles.date, { color: colors.textSub, fontSize: isLarge ? 15 : 14 }]}>
-          {today}
-        </Text>
+        <View style={styles.dateWeatherRow}>
+          <Ionicons name={weather.name as any} size={18} color={weather.color} style={{ marginRight: 6 }} />
+          <Text style={[styles.date, { color: colors.textSub, fontSize: isLarge ? 15 : 14 }]}>
+            {today}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.startArea}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.content, { padding: hPad, paddingTop: 20, paddingBottom: 40 + extraBottomPad }]}
+      >
+        <View style={styles.startArea}>
         <TouchableOpacity
           style={styles.startButton}
           onPress={() => navigation.navigate('AddWorkout', {})}
@@ -414,9 +435,23 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingBottom: 40 },
+  stickyHeader: {
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 3,
+  },
   header: { marginBottom: 20 },
   greeting: { fontSize: 26, fontWeight: '800', lineHeight: 34 },
-  date: { fontSize: 14, marginTop: 4 },
+  dateWeatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  date: { fontSize: 14 },
   startArea: {
     alignItems: 'center',
     justifyContent: 'center',

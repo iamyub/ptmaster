@@ -263,8 +263,19 @@ export default function WorkoutDetailScreen() {
     setIsWorkoutPaused(true);
   };
 
-  const handleResumeWorkout = () => {
+  const handleResumeWorkout = async () => {
     setIsWorkoutPaused(false);
+    if (isExpired && workout) {
+      const today = new Date().toISOString();
+      const updated: Workout = { ...workout, date: today };
+      try {
+        await updateWorkout(updated);
+        setWorkout(updated);
+        setIsExpired(false);
+      } catch {
+        showAlert('오류', '운동 날짜를 오늘로 변경하는 데 실패했습니다.');
+      }
+    }
   };
 
   const toggleCompleted = (
@@ -590,9 +601,9 @@ export default function WorkoutDetailScreen() {
   // ── Progress card ──
   const progressCard = (() => {
     const progressBarColor = isWorkoutPaused || isExpired ? '#BBBBBB' : '#4F8EF7';
-    const statusLabel = isExpired ? '기간 만료' : isWorkoutPaused ? '종료된 운동' : '운동 중';
-    const statusColor = isExpired ? '#888888' : isWorkoutPaused ? '#FF5C5C' : '#34C759';
-    const statusBg = isExpired ? '#88888820' : isWorkoutPaused ? '#FF5C5C20' : '#34C75920';
+    const statusLabel = isExpired || isWorkoutPaused ? '종료된 운동' : '운동 중';
+    const statusColor = isExpired || isWorkoutPaused ? '#FF5C5C' : '#34C759';
+    const statusBg = isExpired || isWorkoutPaused ? '#FF5C5C20' : '#34C75920';
     const showResume = isExpired || isWorkoutPaused;
 
     return (
@@ -792,6 +803,7 @@ export default function WorkoutDetailScreen() {
               timerDuration={timerDuration}
               insets={insets}
               colors={colors}
+              isDark={isDark}
               onSkip={skipTimer}
               onReset={resetTimer}
               onAdjust={adjustTimerSeconds}
@@ -877,6 +889,7 @@ export default function WorkoutDetailScreen() {
             timerDuration={timerDuration}
             insets={insets}
             colors={colors}
+            isDark={isDark}
             onSkip={skipTimer}
             onReset={resetTimer}
             onAdjust={adjustTimerSeconds}
@@ -1100,6 +1113,7 @@ function TimerBar({
   timerDuration,
   insets,
   colors,
+  isDark,
   onSkip,
   onReset,
   onAdjust,
@@ -1109,6 +1123,7 @@ function TimerBar({
   timerDuration: number;
   insets: { bottom: number };
   colors: any;
+  isDark: boolean;
   onSkip: () => void;
   onReset: () => void;
   onAdjust: (delta: number) => void;
@@ -1117,36 +1132,53 @@ function TimerBar({
     <View
       style={[
         styles.timerBar,
-        { paddingBottom: Math.max(insets.bottom, 8), backgroundColor: colors.timerBg },
+        {
+          paddingBottom: Math.max(insets.bottom, 8),
+          backgroundColor: colors.timerBg,
+          borderTopWidth: isDark ? 0 : 1,
+          borderTopColor: colors.border,
+        },
       ]}
     >
       <View style={styles.timerTopRow}>
         <View style={styles.timerLeft}>
-          <Ionicons name="timer-outline" size={15} color="rgba(255,255,255,0.7)" />
-          <Text style={styles.timerLabel}>휴식 중</Text>
-          <Text style={styles.timerDurationHint}>{formatSeconds(timerDuration)}</Text>
+          <Ionicons name="timer-outline" size={15} color={isDark ? "rgba(255,255,255,0.7)" : "#4F8EF7"} />
+          <Text style={[styles.timerLabel, { color: colors.text }]}>휴식 중</Text>
+          <Text style={[styles.timerDurationHint, { color: colors.textMuted }]}>{formatSeconds(timerDuration)}</Text>
         </View>
         <View style={styles.timerRight}>
-          <TouchableOpacity style={styles.timerBtn} onPress={onSkip}>
-            <Text style={styles.timerBtnText}>스킵</Text>
+          <TouchableOpacity
+            style={[styles.timerBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(79,142,247,0.1)' }]}
+            onPress={onSkip}
+          >
+            <Text style={[styles.timerBtnText, { color: isDark ? '#fff' : '#4F8EF7' }]}>스킵</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.timerBtn} onPress={onReset}>
-            <Ionicons name="refresh-outline" size={15} color="#fff" />
+          <TouchableOpacity
+            style={[styles.timerBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(79,142,247,0.1)' }]}
+            onPress={onReset}
+          >
+            <Ionicons name="refresh-outline" size={15} color={isDark ? '#fff' : '#4F8EF7'} />
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.timerCountdownRow}>
-        <TouchableOpacity style={styles.timerAdjustCircle} onPress={() => onAdjust(-10)}>
-          <Text style={styles.timerAdjustCircleText}>−10</Text>
+        <TouchableOpacity
+          style={[styles.timerAdjustCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)' }]}
+          onPress={() => onAdjust(-10)}
+        >
+          <Text style={[styles.timerAdjustCircleText, { color: colors.text }]}>−10</Text>
         </TouchableOpacity>
-        <Text style={styles.timerCountdown}>{formatTime(timerSeconds)}</Text>
-        <TouchableOpacity style={styles.timerAdjustCircle} onPress={() => onAdjust(10)}>
-          <Text style={styles.timerAdjustCircleText}>+10</Text>
+        <Text style={[styles.timerCountdown, { color: colors.primary }]}>{formatTime(timerSeconds)}</Text>
+        <TouchableOpacity
+          style={[styles.timerAdjustCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)' }]}
+          onPress={() => onAdjust(10)}
+        >
+          <Text style={[styles.timerAdjustCircleText, { color: colors.text }]}>+10</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.timerTrack}>
+      <View style={[styles.timerTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
         <View style={[styles.timerFill, { width: `${timerProgress * 100}%` }]} />
       </View>
     </View>

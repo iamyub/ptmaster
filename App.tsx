@@ -67,7 +67,7 @@ function MiniWorkoutBar({
   onPress: () => void;
 }) {
   const { activeWorkout, timerActive, timerSeconds, isWorkoutRunning } = useWorkout();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   if (!activeWorkout || !isWorkoutRunning) return null;
 
   const progress =
@@ -83,34 +83,41 @@ function MiniWorkoutBar({
 
   return (
     <TouchableOpacity
-      style={[miniStyles.bar, { backgroundColor: colors.timerBg }]}
+      style={[
+        miniStyles.bar,
+        {
+          backgroundColor: colors.timerBg,
+          borderTopWidth: isDark ? 0 : 1,
+          borderTopColor: colors.border,
+        },
+      ]}
       onPress={onPress}
       activeOpacity={0.85}
     >
       <View style={miniStyles.barLeft}>
-        <Ionicons name="barbell-outline" size={14} color="rgba(255,255,255,0.7)" />
-        <Text style={miniStyles.barName} numberOfLines={1}>
+        <Ionicons name="barbell-outline" size={14} color={isDark ? "rgba(255,255,255,0.7)" : "#4F8EF7"} />
+        <Text style={[miniStyles.barName, { color: colors.text }]} numberOfLines={1}>
           {activeWorkout.workoutName}
         </Text>
       </View>
 
       <View style={miniStyles.barCenter}>
-        <View style={miniStyles.miniTrack}>
+        <View style={[miniStyles.miniTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)' }]}>
           <View style={[miniStyles.miniFill, { width: `${progress * 100}%` }]} />
         </View>
-        <Text style={miniStyles.barProgress}>
+        <Text style={[miniStyles.barProgress, { color: colors.textSub }]}>
           {activeWorkout.completedSets}/{activeWorkout.totalSets}
         </Text>
       </View>
 
       {timerActive && (
-        <View style={miniStyles.barTimer}>
+        <View style={[miniStyles.barTimer, { backgroundColor: isDark ? 'rgba(79,142,247,0.2)' : 'rgba(79,142,247,0.1)' }]}>
           <Ionicons name="timer-outline" size={12} color="#4F8EF7" />
           <Text style={miniStyles.barTimerText}>{formatMiniTime(timerSeconds)}</Text>
         </View>
       )}
 
-      <Ionicons name="chevron-up" size={16} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+      <Ionicons name="chevron-up" size={16} color={colors.textMuted} style={{ marginLeft: 4 }} />
     </TouchableOpacity>
   );
 }
