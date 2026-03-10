@@ -427,21 +427,16 @@ export default function WorkoutDetailScreen() {
     const exCompletedSets = ex.sets.filter((s) => s.completed).length;
 
     return (
-      <View style={[styles.exerciseCard, { backgroundColor: colors.card }, isActive && styles.exerciseCardDragging]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onLongPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          drag && drag();
+        }}
+        delayLongPress={350}
+        style={[styles.exerciseCard, { backgroundColor: colors.card }, isActive && styles.exerciseCardDragging]}
+      >
         <View style={styles.exerciseCardHeader}>
-          {drag && (
-            <TouchableOpacity
-              onLongPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                drag();
-              }}
-              delayLongPress={250}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={styles.dragHandle}
-            >
-              <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
           <View style={styles.exerciseCardHeaderLeft}>
             <Text style={[styles.exerciseName, { color: colors.text, fontSize: isLarge ? 18 : 17 }]}>
               {displayName(ex.exercise)}
@@ -592,33 +587,26 @@ export default function WorkoutDetailScreen() {
   // ── Progress card ──
   const progressCard = (() => {
     const progressBarColor = isWorkoutPaused || isExpired ? '#BBBBBB' : '#4F8EF7';
+    const statusLabel = isExpired ? '기간 만료' : isWorkoutPaused ? '종료된 운동' : '운동 중';
+    const statusColor = isExpired ? '#888888' : isWorkoutPaused ? '#FF5C5C' : '#34C759';
+    const statusBg = isExpired ? '#88888820' : isWorkoutPaused ? '#FF5C5C20' : '#34C75920';
+    const showResume = isExpired || isWorkoutPaused;
+
     return (
       <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
         <View style={styles.progressHeader}>
           {/* Status badge */}
-          {isExpired ? (
-            <View style={[styles.statusBadge, { backgroundColor: '#88888820' }]}>
-              <Text style={[styles.statusDot, { color: '#888888' }]}>■</Text>
-              <Text style={[styles.statusBadgeText, { color: '#888888' }]}>기간 만료</Text>
-            </View>
-          ) : isWorkoutPaused ? (
-            <View style={[styles.statusBadge, { backgroundColor: '#FF5C5C20' }]}>
-              <Text style={[styles.statusDot, { color: '#FF5C5C' }]}>■</Text>
-              <Text style={[styles.statusBadgeText, { color: '#FF5C5C' }]}>종료된 운동</Text>
-            </View>
-          ) : (
-            <View style={[styles.statusBadge, { backgroundColor: '#34C75920' }]}>
-              <Text style={[styles.statusDot, { color: '#34C759' }]}>●</Text>
-              <Text style={[styles.statusBadgeText, { color: '#34C759' }]}>운동 중</Text>
-            </View>
-          )}
+          <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+            <Text style={[styles.statusDot, { color: statusColor }]}>{statusLabel === '운동 중' ? '●' : '■'}</Text>
+            <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
 
           {/* Right: count + action button */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={styles.progressCount}>
               {completedSets} / {totalSets} 세트
             </Text>
-            {isExpired ? null : isWorkoutPaused ? (
+            {showResume ? (
               <TouchableOpacity
                 style={[styles.progressActionBtn, styles.progressResumeLargeBtn]}
                 onPress={handleResumeWorkout}
@@ -640,7 +628,7 @@ export default function WorkoutDetailScreen() {
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: progressBarColor }]} />
         </View>
-        {estimatedMinutesRemaining > 0 && completedSets < totalSets && !isWorkoutPaused && !isExpired && (
+        {!isWorkoutPaused && !isExpired && estimatedMinutesRemaining > 0 && completedSets < totalSets && (
           <View style={styles.estimatedRow}>
             <Ionicons name="time-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.estimatedText, { color: colors.textMuted }]}>
@@ -654,11 +642,11 @@ export default function WorkoutDetailScreen() {
             <Text style={[styles.estimatedText, { color: '#34C759' }]}>모든 세트 완료!</Text>
           </View>
         )}
-        {isExpired && (
+        {(isExpired || isWorkoutPaused) && (
           <View style={styles.estimatedRow}>
-            <Ionicons name="time-outline" size={13} color="#888" />
-            <Text style={[styles.estimatedText, { color: '#888' }]}>
-              오늘 날짜가 지난 운동입니다.
+            <Ionicons name="information-circle-outline" size={13} color={statusColor} />
+            <Text style={[styles.estimatedText, { color: statusColor }]}>
+              {isExpired ? '날짜가 지난 운동입니다.' : '종료된 운동입니다.'} '운동 재개'로 계속할 수 있습니다.
             </Text>
           </View>
         )}
@@ -735,6 +723,12 @@ export default function WorkoutDetailScreen() {
                   const isSelected = ex.id === selectedEx?.id;
                   return (
                     <TouchableOpacity
+                      activeOpacity={1}
+                      onLongPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                        drag();
+                      }}
+                      delayLongPress={350}
                       key={ex.id}
                       style={[
                         styles.sidebarItem,
@@ -745,12 +739,6 @@ export default function WorkoutDetailScreen() {
                         },
                       ]}
                       onPress={() => setSelectedExId(ex.id)}
-                      onLongPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                        drag();
-                      }}
-                      delayLongPress={250}
-                      activeOpacity={0.7}
                     >
                       <View style={{ flex: 1 }}>
                         <Text

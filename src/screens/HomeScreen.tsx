@@ -324,6 +324,26 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.routineRow}
         >
+          <TouchableOpacity
+            style={[
+              styles.routineCard,
+              {
+                backgroundColor: colors.card,
+                width: isLarge ? 180 : 150,
+                borderWidth: 1.5,
+                borderColor: '#4F8EF7',
+                borderStyle: 'dashed',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 6,
+              },
+            ]}
+            onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add-circle-outline" size={28} color="#4F8EF7" />
+            <Text style={{ color: '#4F8EF7', fontWeight: '700', fontSize: 13 }}>루틴 추가</Text>
+          </TouchableOpacity>
           {routines.map((r) => {
             const names = r.exercises
               .slice(0, 3)
@@ -367,26 +387,6 @@ export default function HomeScreen() {
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity
-            style={[
-              styles.routineCard,
-              {
-                backgroundColor: colors.card,
-                width: isLarge ? 180 : 150,
-                borderWidth: 1.5,
-                borderColor: '#4F8EF7',
-                borderStyle: 'dashed',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 6,
-              },
-            ]}
-            onPress={() => navigation.navigate('ManageRoutines', { openForm: true })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add-circle-outline" size={28} color="#4F8EF7" />
-            <Text style={{ color: '#4F8EF7', fontWeight: '700', fontSize: 13 }}>루틴 추가</Text>
-          </TouchableOpacity>
         </ScrollView>
       </View>
 

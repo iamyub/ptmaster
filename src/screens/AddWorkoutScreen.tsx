@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
@@ -194,229 +196,238 @@ export default function AddWorkoutScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextInput
-          style={[styles.titleInput, { backgroundColor: colors.card, color: colors.text }]}
-          value={title}
-          onChangeText={setTitle}
-          placeholder="운동 제목"
-          placeholderTextColor={colors.textMuted}
-        />
-
-        <View style={[styles.row, { backgroundColor: colors.card }]}>
-          <Ionicons name="time-outline" size={18} color={colors.textSub} />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+    >
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <TextInput
-            style={[styles.durationInput, { color: colors.text }]}
-            value={duration}
-            onChangeText={setDuration}
-            placeholder="운동 시간 (분)"
+            style={[styles.titleInput, { backgroundColor: colors.card, color: colors.text }]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="운동 제목"
             placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
           />
-        </View>
 
-        <NestableDraggableFlatList
-          data={exercises}
-          keyExtractor={(item) => item.id}
-          onDragEnd={({ data }) => setExercises(data)}
-          renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
-            const exIdx = exercises.findIndex((e) => e.id === ex.id);
-            const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
-            const hasPrev = lastSets.length > 0 && !routineExercises;
-            return (
-              <View style={[styles.exerciseBlock, { backgroundColor: colors.card }, isActive && styles.exerciseBlockDragging]}>
-                <View style={styles.exerciseHeader}>
-                  <TouchableOpacity
-                    onLongPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                      drag();
-                    }}
-                    delayLongPress={250}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    style={styles.dragHandle}
-                  >
-                    <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
-                  </TouchableOpacity>
-                  <View style={styles.exerciseTitleArea}>
-                    <Text style={[styles.exerciseName, { color: colors.text }]}>{ex.exercise.name}</Text>
-                    {hasPrev && (
-                      <Text style={styles.prevHint}>
-                        이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
+          <View style={[styles.row, { backgroundColor: colors.card }]}>
+            <Ionicons name="time-outline" size={18} color={colors.textSub} />
+            <TextInput
+              style={[styles.durationInput, { color: colors.text }]}
+              value={duration}
+              onChangeText={setDuration}
+              placeholder="운동 시간 (분)"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+            />
+          </View>
+
+          <NestableDraggableFlatList
+            data={exercises}
+            keyExtractor={(item) => item.id}
+            onDragEnd={({ data }) => setExercises(data)}
+            renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
+              const exIdx = exercises.findIndex((e) => e.id === ex.id);
+              const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
+              const hasPrev = lastSets.length > 0 && !routineExercises;
+              return (
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onLongPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    drag();
+                  }}
+                  delayLongPress={350}
+                  style={[
+                    styles.exerciseBlock,
+                    { backgroundColor: colors.card },
+                    isActive && styles.exerciseBlockDragging,
+                  ]}
+                >
+                  <View style={styles.exerciseHeader}>
+                    <View style={styles.exerciseTitleArea}>
+                      <Text style={[styles.exerciseName, { color: colors.text }]}>
+                        {ex.exercise.name}
                       </Text>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => removeExercise(exIdx)}>
-                    <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* 세트 헤더 */}
-                <View style={styles.setHeader}>
-                  <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
-                  <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
-                  <View style={styles.setHeaderSep} />
-                  <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
-                  <View style={{ width: 28 }} />
-                </View>
-
-                {ex.sets.map((s, setIdx) => (
-                  <View key={s.id} style={styles.setRow}>
-                    <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
-                    <SetStepper
-                      value={s.weight}
-                      onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
-                      step={5}
-                    />
-                    <View style={styles.setColGap} />
-                    <SetStepper
-                      value={s.reps}
-                      onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
-                      step={1}
-                    />
-                    <TouchableOpacity
-                      style={styles.setDeleteBtn}
-                      onPress={() => removeSet(exIdx, setIdx)}
-                      disabled={ex.sets.length <= 1}
-                    >
-                      <Ionicons
-                        name="remove-circle-outline"
-                        size={20}
-                        color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
-                      />
+                      {hasPrev && (
+                        <Text style={styles.prevHint}>
+                          이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => removeExercise(exIdx)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
                     </TouchableOpacity>
                   </View>
-                ))}
 
-                <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
-                  <Ionicons name="add" size={16} color="#4F8EF7" />
-                  <Text style={styles.addSetText}>세트 추가</Text>
+                  {/* 세트 헤더 */}
+                  <View style={styles.setHeader}>
+                    <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                    <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
+                    <View style={styles.setHeaderSep} />
+                    <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
+                    <View style={{ width: 28 }} />
+                  </View>
+
+                  {ex.sets.map((s, setIdx) => (
+                    <View key={s.id} style={styles.setRow}>
+                      <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
+                      <SetStepper
+                        value={s.weight}
+                        onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
+                        step={5}
+                      />
+                      <View style={styles.setColGap} />
+                      <SetStepper
+                        value={s.reps}
+                        onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
+                        step={1}
+                      />
+                      <TouchableOpacity
+                        style={styles.setDeleteBtn}
+                        onPress={() => removeSet(exIdx, setIdx)}
+                        disabled={ex.sets.length <= 1}
+                      >
+                        <Ionicons
+                          name="remove-circle-outline"
+                          size={20}
+                          color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
+                    <Ionicons name="add" size={16} color="#4F8EF7" />
+                    <Text style={styles.addSetText}>세트 추가</Text>
+                  </TouchableOpacity>
+
+                  <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
+                    <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
+                    <TextInput
+                      style={[styles.exNoteInput, { color: colors.text }]}
+                      value={ex.notes || ''}
+                      onChangeText={(text) => updateExerciseNote(exIdx, text)}
+                      placeholder="운동 메모..."
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                    />
+                  </View>
                 </TouchableOpacity>
+              );
+            }}
+          />
 
-                <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
-                  <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
-                  <TextInput
-                    style={[styles.exNoteInput, { color: colors.text }]}
-                    value={ex.notes || ''}
-                    onChangeText={(text) => updateExerciseNote(exIdx, text)}
-                    placeholder="운동 메모..."
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                  />
-                </View>
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, { borderColor: colors.primary }]}
+              onPress={() => setShowExercisePicker(true)}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>운동 추가</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { borderColor: '#4F8EF7', backgroundColor: colors.background === '#0D0D1A' ? 'rgba(79,142,247,0.1)' : '#F0F7FF' }]}
+              onPress={() => setShowRoutinePicker(true)}
+            >
+              <Ionicons name="list-outline" size={20} color="#4F8EF7" />
+              <Text style={[styles.actionBtnText, { color: '#4F8EF7' }]}>루틴 추가</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TextInput
+            style={[styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="메모 (선택)"
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={3}
+          />
+        </NestableScrollContainer>
+
+        {showExercisePicker && (
+          <View style={styles.pickerOverlay}>
+            <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
+              <View style={styles.pickerHeader}>
+                <Text style={[styles.pickerTitle, { color: colors.text }]}>운동 선택</Text>
+                <TouchableOpacity onPress={() => setShowExercisePicker(false)}>
+                  <Ionicons name="close" size={22} color={colors.textSub} />
+                </TouchableOpacity>
               </View>
-            );
-          }}
-        />
-
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: colors.primary }]}
-            onPress={() => setShowExercisePicker(true)}
-          >
-            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-            <Text style={[styles.actionBtnText, { color: colors.primary }]}>운동 추가</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: '#4F8EF7', backgroundColor: colors.background === '#0D0D1A' ? 'rgba(79,142,247,0.1)' : '#F0F7FF' }]}
-            onPress={() => setShowRoutinePicker(true)}
-          >
-            <Ionicons name="list-outline" size={20} color="#4F8EF7" />
-            <Text style={[styles.actionBtnText, { color: '#4F8EF7' }]}>루틴 추가</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TextInput
-          style={[styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="메모 (선택)"
-          placeholderTextColor={colors.textMuted}
-          multiline
-          numberOfLines={3}
-        />
-      </NestableScrollContainer>
-
-      {showExercisePicker && (
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
-            <View style={styles.pickerHeader}>
-              <Text style={[styles.pickerTitle, { color: colors.text }]}>운동 선택</Text>
-              <TouchableOpacity onPress={() => setShowExercisePicker(false)}>
-                <Ionicons name="close" size={22} color={colors.textSub} />
-              </TouchableOpacity>
+              <ScrollView style={styles.pickerList}>
+                {DEFAULT_EXERCISES.map((e) => {
+                  const last = findLastSets(pastWorkouts, e.id);
+                  return (
+                    <TouchableOpacity
+                      key={e.id}
+                      style={[styles.pickerItem, { borderBottomColor: colors.border }]}
+                      onPress={() => addExercise(e.id)}
+                    >
+                      <Text style={[styles.pickerItemName, { color: colors.text }]}>{e.name}</Text>
+                      <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
+                        {[e.equipment, e.description].filter(Boolean).join(' · ')}
+                        {last.length > 0
+                          ? `  ·  최근 ${last[0].weight}kg × ${last[0].reps}회`
+                          : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
-            <ScrollView style={styles.pickerList}>
-              {DEFAULT_EXERCISES.map((e) => {
-                const last = findLastSets(pastWorkouts, e.id);
-                return (
-                  <TouchableOpacity
-                    key={e.id}
-                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
-                    onPress={() => addExercise(e.id)}
-                  >
-                    <Text style={[styles.pickerItemName, { color: colors.text }]}>{e.name}</Text>
-                    <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
-                      {[e.equipment, e.description].filter(Boolean).join(' · ')}
-                      {last.length > 0
-                        ? `  ·  최근 ${last[0].weight}kg × ${last[0].reps}회`
-                        : ''}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
           </View>
-        </View>
-      )}
+        )}
 
-      <Modal
-        visible={showRoutinePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowRoutinePicker(false)}
-      >
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
-            <View style={styles.pickerHeader}>
-              <Text style={[styles.pickerTitle, { color: colors.text }]}>루틴 선택</Text>
-              <TouchableOpacity onPress={() => setShowRoutinePicker(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={22} color={colors.textSub} />
-              </TouchableOpacity>
+        <Modal
+          visible={showRoutinePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowRoutinePicker(false)}
+        >
+          <View style={styles.pickerOverlay}>
+            <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
+              <View style={styles.pickerHeader}>
+                <Text style={[styles.pickerTitle, { color: colors.text }]}>루틴 선택</Text>
+                <TouchableOpacity onPress={() => setShowRoutinePicker(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={22} color={colors.textSub} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.pickerList}>
+                {routines.length === 0 ? (
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Text style={{ color: colors.textMuted }}>저장된 루틴이 없어요.</Text>
+                  </View>
+                ) : (
+                  routines.map((r) => (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.pickerItem, { borderBottomColor: colors.border }]}
+                      onPress={() => applyRoutine(r)}
+                    >
+                      <Text style={[styles.pickerItemName, { color: colors.text }]}>{r.name}</Text>
+                      <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
+                        {r.exercises.length}개 종목
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
             </View>
-            <ScrollView style={styles.pickerList}>
-              {routines.length === 0 ? (
-                <View style={{ padding: 40, alignItems: 'center' }}>
-                  <Text style={{ color: colors.textMuted }}>저장된 루틴이 없어요.</Text>
-                </View>
-              ) : (
-                routines.map((r) => (
-                  <TouchableOpacity
-                    key={r.id}
-                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
-                    onPress={() => applyRoutine(r)}
-                  >
-                    <Text style={[styles.pickerItemName, { color: colors.text }]}>{r.name}</Text>
-                    <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
-                      {r.exercises.length}개 종목
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <TouchableOpacity
-        style={[styles.saveButton, saving && { opacity: 0.6 }]}
-        onPress={handleSave}
-        disabled={saving}
-      >
-        <Text style={styles.saveButtonText}>저장하기</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={[styles.saveButton, saving && { opacity: 0.6 }]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          <Text style={styles.saveButtonText}>저장하기</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
