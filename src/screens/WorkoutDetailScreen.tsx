@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   useWindowDimensions,
   Modal,
   FlatList,
@@ -12,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
