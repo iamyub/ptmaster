@@ -336,7 +336,7 @@ export default function AddWorkoutScreen() {
           multiline
           numberOfLines={3}
         />
-      </ScrollView>
+      </NestableScrollContainer>
 
       {showExercisePicker && (
         <View style={styles.pickerOverlay}>
