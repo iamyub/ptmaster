@@ -36,7 +36,8 @@ export default function LoginScreen() {
         await authService.signIn(email, password);
       }
     } catch (error: any) {
-      let msg = '인증에 실패했습니다.';
+      console.error('Auth error detail:', error);
+      let msg = `인증에 실패했습니다. (${error.code})`;
       if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 이메일입니다.';
       if (error.code === 'auth/invalid-email') msg = '유효하지 않은 이메일 형식입니다.';
       if (error.code === 'auth/weak-password') msg = '비밀번호는 최소 6자리 이상이어야 합니다.';
