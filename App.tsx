@@ -277,27 +277,44 @@ function AppInner() {
 
   // Handle user state changes
   useEffect(() => {
-    const subscriber = authService.onAuthStateChanged(async (user) => {
-      if (user) {
-        // 1. Sync basic info to Firestore
-        await authService.syncUserToFirestore(user);
-        // 2. Check onboarding status
-        const firstTime = await authService.checkIsFirstTime(user.uid);
-        setIsFirstTime(firstTime);
-        setUser(user);
+    const subscriber = authService.onAuthStateChanged(async (u) => {
+      console.log('[Auth] State changed:', u ? u.uid : 'null');
+      
+      if (u) {
+        setUser(u);
+        // Non-blocking sync & check
+        authService.syncUserToFirestore(u).then(async () => {
+          const firstTime = await authService.checkIsFirstTime(u.uid);
+          console.log('[Auth] isFirstTime:', firstTime);
+          setIsFirstTime(firstTime);
+          setInitializing(false);
+        }).catch(e => {
+          console.error('[Auth] Firestore check failed:', e);
+          setInitializing(false);
+        });
       } else {
         // Silent anonymous login if not logged in
-        try {
-          await authService.signInGuest();
-        } catch (e) {
-          console.error('Silent guest login failed:', e);
-          setUser(null);
-        }
+        console.log('[Auth] Attempting silent guest login...');
+        authService.signInGuest().catch(e => {
+          console.error('[Auth] Silent guest login failed:', e);
+          setInitializing(false);
+        });
       }
-      if (initializing) setInitializing(false);
     });
-    return subscriber;
-  }, [initializing]);
+
+    // Safety timeout: Ensure app opens even if auth hangs
+    const timeout = setTimeout(() => {
+      if (initializing) {
+        console.warn('[Auth] Initialization timed out. Forcing start.');
+        setInitializing(false);
+      }
+    }, 5000);
+
+    return () => {
+      subscriber();
+      clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -345,6 +362,7 @@ function AppInner() {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color="#4F8EF7" />
+        <Text style={{ marginTop: 16, color: colors.textSub }}>초기화 중...</Text>
       </View>
     );
   }
@@ -370,14 +388,12 @@ function AppInner() {
             }}
           >
             {!user ? (
-              // Login flow (usually skipped by silent guest login)
               <Stack.Screen 
                 name="Login" 
                 component={LoginScreen} 
                 options={{ headerShown: false }}
               />
             ) : (
-              // Main app flow
               <>
                 <Stack.Screen name="MainTabs" options={{ headerShown: false }}>
                   {(props) => <MainTabs navigation={props.navigation as any} />}
