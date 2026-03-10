@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
+  TouchableOpacity as RNTouchableOpacity,
   ScrollView,
   Modal,
   KeyboardAvoidingView,
@@ -103,7 +104,7 @@ export default function AddWorkoutScreen() {
     const sets =
       lastSets.length > 0
         ? lastSets.map((s) => createDefaultSet(s.weight, s.reps))
-        : [createDefaultSet()];
+        : [createDefaultSet(0, 0)];
     setExercises((prev) => [...prev, { id: generateId(), exercise: found, sets }]);
     setShowExercisePicker(false);
   };
@@ -216,7 +217,7 @@ export default function AddWorkoutScreen() {
       await addWorkout(currentUser.uid, workout);
       navigation.replace('WorkoutDetail', { workoutId: workout.id, autoStart: true });
     } catch {
-      showAlert('오류', '운동 기록 저장에 실패했습니다.');
+      showAlert('오류', '운동 시작에 실패했습니다.');
     } finally {
       setSaving(false);
     }
@@ -396,15 +397,15 @@ export default function AddWorkoutScreen() {
             <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
               <View style={styles.pickerHeader}>
                 <Text style={[styles.pickerTitle, { color: colors.text }]}>운동 선택</Text>
-                <TouchableOpacity onPress={() => setShowExercisePicker(false)}>
+                <RNTouchableOpacity onPress={() => setShowExercisePicker(false)}>
                   <Ionicons name="close" size={22} color={colors.textSub} />
-                </TouchableOpacity>
+                </RNTouchableOpacity>
               </View>
               <ScrollView style={styles.pickerList}>
                 {DEFAULT_EXERCISES.map((e) => {
                   const last = findLastSets(pastWorkouts, e.id);
                   return (
-                    <TouchableOpacity
+                    <RNTouchableOpacity
                       key={e.id}
                       style={[styles.pickerItem, { borderBottomColor: colors.border }]}
                       onPress={() => addExercise(e.id)}
@@ -416,7 +417,7 @@ export default function AddWorkoutScreen() {
                           ? `  ·  최근 ${last[0].weight}kg × ${last[0].reps}회`
                           : ''}
                       </Text>
-                    </TouchableOpacity>
+                    </RNTouchableOpacity>
                   );
                 })}
               </ScrollView>
@@ -434,9 +435,9 @@ export default function AddWorkoutScreen() {
             <View style={[styles.pickerCard, { backgroundColor: colors.card }]}>
               <View style={styles.pickerHeader}>
                 <Text style={[styles.pickerTitle, { color: colors.text }]}>루틴 선택</Text>
-                <TouchableOpacity onPress={() => setShowRoutinePicker(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <RNTouchableOpacity onPress={() => setShowRoutinePicker(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close" size={22} color={colors.textSub} />
-                </TouchableOpacity>
+                </RNTouchableOpacity>
               </View>
               <ScrollView style={styles.pickerList}>
                 {routines.length === 0 ? (
@@ -445,7 +446,7 @@ export default function AddWorkoutScreen() {
                   </View>
                 ) : (
                   routines.map((r) => (
-                    <TouchableOpacity
+                    <RNTouchableOpacity
                       key={r.id}
                       style={[styles.pickerItem, { borderBottomColor: colors.border }]}
                       onPress={() => applyRoutine(r)}
@@ -454,7 +455,7 @@ export default function AddWorkoutScreen() {
                       <Text style={[styles.pickerItemMuscles, { color: colors.textSub }]}>
                         {r.exercises.length}개 종목
                       </Text>
-                    </TouchableOpacity>
+                    </RNTouchableOpacity>
                   ))
                 )}
               </ScrollView>
@@ -467,7 +468,7 @@ export default function AddWorkoutScreen() {
           onPress={handleSave}
           disabled={saving}
         >
-          <Text style={styles.saveButtonText}>저장하기</Text>
+          <Text style={styles.saveButtonText}>시작하기</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
