@@ -35,7 +35,10 @@ export async function loadRestTime(uid: string): Promise<number> {
   try {
     const snap = await getDoc(getSettingsRef(uid));
     return snap.exists() ? (snap.data().restTime ?? DEFAULT_REST_TIME) : DEFAULT_REST_TIME;
-  } catch {
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading rest time:', error);
+    }
     return DEFAULT_REST_TIME;
   }
 }
@@ -51,7 +54,10 @@ export async function loadAlarmSettings(uid: string): Promise<AlarmSettings> {
   try {
     const snap = await getDoc(getSettingsRef(uid));
     return snap.exists() ? { ...DEFAULT_ALARM_SETTINGS, ...snap.data().alarmSettings } : DEFAULT_ALARM_SETTINGS;
-  } catch {
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading alarm settings:', error);
+    }
     return DEFAULT_ALARM_SETTINGS;
   }
 }
@@ -67,7 +73,10 @@ export async function loadExerciseRestTimes(uid: string): Promise<ExerciseRestTi
   try {
     const snap = await getDoc(getSettingsRef(uid));
     return snap.exists() ? (snap.data().exerciseRestTimes ?? {}) : {};
-  } catch {
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading exercise rest times:', error);
+    }
     return {};
   }
 }
@@ -93,7 +102,10 @@ export async function loadCustomAlternatives(uid: string): Promise<CustomAlterna
   try {
     const snap = await getDoc(getSettingsRef(uid));
     return snap.exists() ? (snap.data().customAlternatives ?? {}) : {};
-  } catch {
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading custom alternatives:', error);
+    }
     return {};
   }
 }

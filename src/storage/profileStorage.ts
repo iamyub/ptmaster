@@ -33,8 +33,11 @@ export async function loadProfile(uid: string): Promise<UserProfile> {
       };
     }
     return DEFAULT_PROFILE;
-  } catch (error) {
-    console.error('Error loading profile:', error);
+  } catch (error: any) {
+    // 오프라인 에러일 경우 로그를 남기지 않고 조용히 기본값 반환
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading profile:', error);
+    }
     return DEFAULT_PROFILE;
   }
 }

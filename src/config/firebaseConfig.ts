@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Firebase 프로젝트 실제 설정값 적용
@@ -22,6 +22,12 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
 
-const db = getFirestore(app);
+/**
+ * Expo/React Native 환경에서 WebSocket 연결이 불안정할 경우를 대비해
+ * 롱 폴링(Long Polling) 방식을 강제 활성화합니다.
+ */
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 
 export { auth, db };

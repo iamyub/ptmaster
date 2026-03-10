@@ -20,8 +20,10 @@ export async function loadRoutines(uid: string): Promise<Routine[]> {
   try {
     const snapshot = await getDocs(getRoutinesRef(uid));
     return snapshot.docs.map(doc => doc.data() as Routine);
-  } catch (error) {
-    console.error('Error loading routines:', error);
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading routines:', error);
+    }
     return [];
   }
 }

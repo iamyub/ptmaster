@@ -5,8 +5,7 @@ import {
   deleteDoc, 
   doc, 
   query, 
-  orderBy,
-  getDoc
+  orderBy
 } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 import { Workout } from '../types';
@@ -24,8 +23,10 @@ export async function loadWorkouts(uid: string): Promise<Workout[]> {
     const q = query(getWorkoutsRef(uid), orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => doc.data() as Workout);
-  } catch (error) {
-    console.error('Error loading workouts:', error);
+  } catch (error: any) {
+    if (error.code !== 'unavailable' && !error.message.includes('offline')) {
+      console.error('Error loading workouts:', error);
+    }
     return [];
   }
 }
