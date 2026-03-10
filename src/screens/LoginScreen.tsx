@@ -121,6 +121,13 @@ export default function LoginScreen() {
                 {isSignUp ? '이미 계정이 있으신가요? 로그인' : '처음이신가요? 계정 만들기'}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => authService.signInGuest()} 
+              style={styles.guestBtn}
+            >
+              <Text style={styles.guestBtnText}>로그인 없이 둘러보기</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.dividerRow}>
@@ -246,6 +253,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textDecorationLine: 'underline',
+  },
+  guestBtn: {
+    marginTop: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  guestBtnText: {
+    fontSize: 14,
+    color: '#4F8EF7',
+    fontWeight: '600',
   },
   dividerRow: {
     flexDirection: 'row',

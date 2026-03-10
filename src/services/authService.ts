@@ -2,6 +2,7 @@ import {
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
+  signInAnonymously,
   signOut,
   User
 } from 'firebase/auth';
@@ -59,6 +60,19 @@ export const authService = {
   },
 
   /**
+   * Sign in anonymously (Guest mode)
+   */
+  signInGuest: async () => {
+    try {
+      const userCredential = await signInAnonymously(auth);
+      return userCredential.user;
+    } catch (error) {
+      console.error('Guest sign in error:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Sign out
    */
   signOut: async () => {
@@ -84,7 +98,7 @@ export const authService = {
       const newUser: UserProfile = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || '사용자',
+        displayName: user.isAnonymous ? '게스트' : (user.displayName || '사용자'),
         photoURL: user.photoURL,
         currentMargin: 63225,
         createdAt: serverTimestamp(),
@@ -94,7 +108,7 @@ export const authService = {
       // Update existing user profile info if changed
       await updateDoc(userRef, {
         email: user.email,
-        displayName: user.displayName || snap.data()?.displayName,
+        displayName: snap.data()?.displayName || (user.isAnonymous ? '게스트' : '사용자'),
         photoURL: user.photoURL || snap.data()?.photoURL,
       });
     }
