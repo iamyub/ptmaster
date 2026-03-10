@@ -9,6 +9,8 @@ import {
   Modal,
   FlatList,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
