@@ -557,7 +557,7 @@ export default function WorkoutDetailScreen() {
             multiline
           />
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
