@@ -3,14 +3,15 @@ import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Firebase 프로젝트 설정 (실제 값으로 교체 필요)
+// Firebase 프로젝트 실제 설정값 적용
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDpsovyVAJUw_gM2mshS-4bVOFvkL66lSc",
+  authDomain: "ptmaster-94e53.firebaseapp.com",
+  projectId: "ptmaster-94e53",
+  storageBucket: "ptmaster-94e53.firebasestorage.app",
+  messagingSenderId: "406682351820",
+  appId: "1:406682351820:web:cf37b235ccd4bd803e6a69",
+  measurementId: "G-H565J7XC9Q"
 };
 
 // Initialize Firebase
