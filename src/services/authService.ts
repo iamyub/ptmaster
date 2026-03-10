@@ -1,5 +1,12 @@
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut,
+  User
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../config/firebaseConfig';
 
 export interface UserProfile {
   uid: string;
@@ -14,15 +21,41 @@ export const authService = {
   /**
    * Observe auth state changes
    */
-  onAuthStateChanged: (callback: (user: any) => void) => {
-    return auth().onAuthStateChanged(callback);
+  onAuthStateChanged: (callback: (user: User | null) => void) => {
+    return onAuthStateChanged(auth, callback);
   },
 
   /**
    * Get current user
    */
   getCurrentUser: () => {
-    return auth().currentUser;
+    return auth.currentUser;
+  },
+
+  /**
+   * Sign in with email and password
+   */
+  signIn: async (email: string, pass: string) => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      return userCredential.user;
+    } catch (error) {
+      console.error('Sign in error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Sign up with email and password
+   */
+  signUp: async (email: string, pass: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      return userCredential.user;
+    } catch (error) {
+      console.error('Sign up error:', error);
+      throw error;
+    }
   },
 
   /**
@@ -30,7 +63,7 @@ export const authService = {
    */
   signOut: async () => {
     try {
-      await auth().signOut();
+      await signOut(auth);
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
@@ -40,48 +73,41 @@ export const authService = {
   /**
    * Initialize or update user data in Firestore after login
    */
-  syncUserToFirestore: async (user: any) => {
+  syncUserToFirestore: async (user: User) => {
     if (!user) return;
 
-    const userRef = firestore().collection('users').doc(user.uid);
-    const doc = await userRef.get();
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
 
-    if (!doc.exists) {
+    if (!snap.exists()) {
       // Create new user record with initial values
       const newUser: UserProfile = {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName || '사용자',
         photoURL: user.photoURL,
-        currentMargin: 63225, // Requested initial value
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        currentMargin: 63225,
+        createdAt: serverTimestamp(),
       };
-      await userRef.set(newUser);
+      await setDoc(userRef, newUser);
     } else {
       // Update existing user profile info if changed
-      await userRef.update({
+      await updateDoc(userRef, {
         email: user.email,
-        displayName: user.displayName || doc.data()?.displayName,
-        photoURL: user.photoURL || doc.data()?.photoURL,
+        displayName: user.displayName || snap.data()?.displayName,
+        photoURL: user.photoURL || snap.data()?.photoURL,
       });
     }
   },
 
-  // Note: Actual Social Login implementations (Google, Kakao, Apple) 
-  // require additional native libraries and configuration.
-  // These are stubs for now as they depend on your specific keys and setup.
+  // Stubs for social login (will be implemented in Dev Build)
   signInWithGoogle: async () => {
-    console.log('Google login triggered - requires @react-native-google-signin/google-signin');
-    // Implementation placeholder
+    alert('Social login requires Dev Build. Please use Email login for now in Expo Go.');
   },
-
   signInWithKakao: async () => {
-    console.log('Kakao login triggered - requires @actbase/react-native-kakaosdk or similar');
-    // Implementation placeholder
+    alert('Social login requires Dev Build. Please use Email login for now in Expo Go.');
   },
-
   signInWithApple: async () => {
-    console.log('Apple login triggered - requires @invertase/react-native-apple-authentication');
-    // Implementation placeholder
+    alert('Social login requires Dev Build. Please use Email login for now in Expo Go.');
   }
 };
