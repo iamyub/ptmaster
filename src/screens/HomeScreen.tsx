@@ -27,7 +27,7 @@ import { useWorkout, MINI_BAR_HEIGHT } from '../context/WorkoutContext';
 const GREETINGS = [
   '"현관문을 열고 나가면 이미 운동의 시작"',
   '"운동 안하면 빨리 늙는다"',
-  '"운동 많이 된다. 오늘 밤에 푹 잘꺼야"',
+  '"오늘 운동 많이 된다. 밤에 푹 잘꺼야"',
   '"운동은 하루를 짧게 하지만, 인생을 길게 만든다"',
 ];
 

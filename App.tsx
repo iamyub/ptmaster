@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   StyleSheet,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -53,10 +54,12 @@ import AddWorkoutScreen from './src/screens/AddWorkoutScreen';
 import WorkoutDetailScreen from './src/screens/WorkoutDetailScreen';
 import ManageRoutinesScreen from './src/screens/ManageRoutinesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import LoginScreen from './src/screens/LoginScreen';
 import WebAlertModal, { WebAlertRef } from './src/components/WebAlertModal';
 import { registerWebAlert } from './src/utils/alert';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { WorkoutProvider, useWorkout, MINI_BAR_HEIGHT } from './src/context/WorkoutContext';
+import { authService } from './src/services/authService';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -267,6 +270,20 @@ function MainTabs({
 function AppInner() {
   const alertRef = useRef<WebAlertRef>(null);
   const { colors } = useTheme();
+  const [initializing, setInitializing] = useState(true);
+  const [user, setUser] = useState<any>(null);
+
+  // Handle user state changes
+  useEffect(() => {
+    const subscriber = authService.onAuthStateChanged((user) => {
+      setUser(user);
+      if (user) {
+        authService.syncUserToFirestore(user);
+      }
+      if (initializing) setInitializing(false);
+    });
+    return subscriber; // unsubscribe on unmount
+  }, [initializing]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -310,6 +327,14 @@ function AppInner() {
     };
   }, []);
 
+  if (initializing) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color="#4F8EF7" />
+      </View>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider style={{ backgroundColor: colors.background }}>
@@ -323,29 +348,41 @@ function AppInner() {
               contentStyle: { backgroundColor: colors.background },
             }}
           >
-            <Stack.Screen name="MainTabs" options={{ headerShown: false }}>
-              {(props) => <MainTabs navigation={props.navigation as any} />}
-            </Stack.Screen>
-            <Stack.Screen
-              name="AddWorkout"
-              component={AddWorkoutScreen}
-              options={{ title: '운동 추가' }}
-            />
-            <Stack.Screen
-              name="WorkoutDetail"
-              component={WorkoutDetailScreen}
-              options={{ title: '운동 상세', headerBackTitle: '메인 화면' }}
-            />
-            <Stack.Screen
-              name="ManageRoutines"
-              component={ManageRoutinesScreen}
-              options={{ title: '루틴 관리' }}
-            />
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ title: '설정', headerBackTitle: '메인 화면' }}
-            />
+            {!user ? (
+              // Login flow
+              <Stack.Screen 
+                name="Login" 
+                component={LoginScreen} 
+                options={{ headerShown: false }}
+              />
+            ) : (
+              // Main app flow
+              <>
+                <Stack.Screen name="MainTabs" options={{ headerShown: false }}>
+                  {(props) => <MainTabs navigation={props.navigation as any} />}
+                </Stack.Screen>
+                <Stack.Screen
+                  name="AddWorkout"
+                  component={AddWorkoutScreen}
+                  options={{ title: '운동 추가' }}
+                />
+                <Stack.Screen
+                  name="WorkoutDetail"
+                  component={WorkoutDetailScreen}
+                  options={{ title: '운동 상세', headerBackTitle: '메인 화면' }}
+                />
+                <Stack.Screen
+                  name="ManageRoutines"
+                  component={ManageRoutinesScreen}
+                  options={{ title: '루틴 관리' }}
+                />
+                <Stack.Screen
+                  name="Settings"
+                  component={SettingsScreen}
+                  options={{ title: '설정', headerBackTitle: '메인 화면' }}
+                />
+              </>
+            )}
           </Stack.Navigator>
         </NavigationContainer>
         {Platform.OS === 'web' && <WebAlertModal ref={alertRef} />}
