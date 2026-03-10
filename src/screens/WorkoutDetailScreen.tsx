@@ -103,6 +103,7 @@ export default function WorkoutDetailScreen() {
   const [alarmSettings, setAlarmSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [exerciseRestTimes, setExerciseRestTimes] = useState<ExerciseRestTimes>({});
   const [customAlternatives, setCustomAlternatives] = useState<CustomAlternatives>({});
+  const [isDragging, setIsDragging] = useState(false);
 
   // ── Refs ──
   const workoutRef = useRef<Workout | null>(null);
@@ -692,81 +693,180 @@ export default function WorkoutDetailScreen() {
     const selectedEx = editedExercises.find((e) => e.id === selectedExId) ?? editedExercises[0];
 
     return (
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.largeLayout,
-            { paddingBottom: timerActive ? TIMER_BAR_HEIGHT + insets.bottom + 8 : 16 },
-          ]}
-        >
-          {/* Left column */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      >
+        <View style={[styles.screen, { backgroundColor: colors.background }]}>
           <View
-            style={[styles.leftColumn, { backgroundColor: colors.card, borderRightColor: colors.border }]}
+            style={[
+              styles.largeLayout,
+              { paddingBottom: timerActive ? TIMER_BAR_HEIGHT + insets.bottom + 8 : 16 },
+            ]}
           >
-            <NestableScrollContainer contentContainerStyle={{ padding: 16 }}>
-              {headerCard}
-              {workout.notes && (
-                <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
-                  <Ionicons name="document-text-outline" size={16} color={colors.textSub} />
-                  <Text style={[styles.notesText, { color: colors.textSub }]}>{workout.notes}</Text>
-                </View>
-              )}
-              {progressCard}
+            {/* Left column */}
+            <View
+              style={[styles.leftColumn, { backgroundColor: colors.card, borderRightColor: colors.border }]}
+            >
+              <NestableScrollContainer
+                contentContainerStyle={{ padding: 16 }}
+                scrollEnabled={!isDragging}
+                bounces={!isDragging}
+              >
+                {headerCard}
+                {workout.notes && (
+                  <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
+                    <Ionicons name="document-text-outline" size={16} color={colors.textSub} />
+                    <Text style={[styles.notesText, { color: colors.textSub }]}>{workout.notes}</Text>
+                  </View>
+                )}
+                {progressCard}
 
-              <Text style={[styles.sidebarSectionLabel, { color: colors.textMuted }]}>운동 종목 (드래그하여 순서 변경)</Text>
-              <NestableDraggableFlatList
-                data={editedExercises}
-                keyExtractor={(ex) => ex.id}
-                onDragEnd={({ data }) => setEditedExercises(data)}
-                renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
-                  const exDone = ex.sets.filter((s) => s.completed).length;
-                  const isSelected = ex.id === selectedEx?.id;
-                  return (
-                    <TouchableOpacity
-                      activeOpacity={1}
-                      onLongPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                        drag();
-                      }}
-                      delayLongPress={350}
-                      key={ex.id}
-                      style={[
-                        styles.sidebarItem,
-                        {
-                          backgroundColor: isActive ? colors.primaryBg : isSelected ? colors.primaryBg : colors.background,
-                          borderColor: isSelected ? '#4F8EF7' : 'transparent',
-                          opacity: isActive ? 0.7 : 1,
-                        },
-                      ]}
-                      onPress={() => setSelectedExId(ex.id)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
-                          numberOfLines={1}
-                        >
-                          {displayName(ex.exercise)}
-                        </Text>
-                        <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
-                          {exDone}/{ex.sets.length} 세트
-                        </Text>
-                      </View>
-                      {exDone === ex.sets.length && ex.sets.length > 0 && (
-                        <Ionicons name="checkmark-circle" size={18} color="#34C759" />
-                      )}
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            </NestableScrollContainer>
+                <Text style={[styles.sidebarSectionLabel, { color: colors.textMuted }]}>운동 종목 (드래그하여 순서 변경)</Text>
+                <NestableDraggableFlatList
+                  data={editedExercises}
+                  keyExtractor={(ex) => ex.id}
+                  onDragBegin={() => setIsDragging(true)}
+                  onDragEnd={({ data }) => {
+                    setEditedExercises(data);
+                    setIsDragging(false);
+                  }}
+                  activationDistance={Platform.select({ ios: 10, android: 15 })}
+                  renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
+                    const exDone = ex.sets.filter((s) => s.completed).length;
+                    const isSelected = ex.id === selectedEx?.id;
+                    return (
+                      <TouchableOpacity
+                        activeOpacity={1}
+                        onLongPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                          drag();
+                        }}
+                        delayLongPress={350}
+                        key={ex.id}
+                        style={[
+                          styles.sidebarItem,
+                          {
+                            backgroundColor: isActive ? colors.primaryBg : isSelected ? colors.primaryBg : colors.background,
+                            borderColor: isSelected ? '#4F8EF7' : 'transparent',
+                            opacity: isActive ? 0.7 : 1,
+                          },
+                        ]}
+                        onPress={() => setSelectedExId(ex.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
+                            numberOfLines={1}
+                          >
+                            {displayName(ex.exercise)}
+                          </Text>
+                          <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
+                            {exDone}/{ex.sets.length} 세트
+                          </Text>
+                        </View>
+                        {exDone === ex.sets.length && ex.sets.length > 0 && (
+                          <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </NestableScrollContainer>
+            </View>
+
+            {/* Right column */}
+            <ScrollView style={styles.rightColumn} contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+              {selectedEx && renderExerciseCard(selectedEx)}
+              {actionButtons}
+            </ScrollView>
           </View>
 
-          {/* Right column */}
-          <ScrollView style={styles.rightColumn} contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
-            {selectedEx && renderExerciseCard(selectedEx)}
-            {actionButtons}
-          </ScrollView>
+          {timerActive && (
+            <TimerBar
+              timerSeconds={timerSeconds}
+              timerProgress={timerProgress}
+              timerDuration={timerDuration}
+              insets={insets}
+              colors={colors}
+              onSkip={skipTimer}
+              onReset={resetTimer}
+              onAdjust={adjustTimerSeconds}
+            />
+          )}
+
+          {changeTargetExId && (
+            <ExerciseChangeModal
+              targetWexId={changeTargetExId}
+              editedExercises={editedExercises}
+              customAlternatives={customAlternatives}
+              onClose={() => setChangeTargetExId(null)}
+              onConfirm={handleChangeExercise}
+              colors={colors}
+            />
+          )}
+
+          {showAddExModal && (
+            <AddExerciseModal
+              search={addExSearch}
+              onSearchChange={setAddExSearch}
+              candidates={addExCandidates}
+              onSelect={handleAddExercise}
+              onClose={() => { setShowAddExModal(false); setAddExSearch(''); }}
+              colors={colors}
+            />
+          )}
         </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ── SMALL/MEDIUM SCREEN ──
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+    >
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <View style={{ paddingHorizontal: horizontalPad, paddingTop: 12, backgroundColor: colors.background }}>
+          {progressCard}
+        </View>
+        <NestableScrollContainer
+          style={styles.container}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={!isDragging}
+          bounces={!isDragging}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: bottomPad, paddingHorizontal: horizontalPad },
+          ]}
+        >
+          {headerCard}
+
+          {workout.notes && (
+            <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
+              <Ionicons name="document-text-outline" size={16} color={colors.textSub} />
+              <Text style={[styles.notesText, { color: colors.textSub }]}>{workout.notes}</Text>
+            </View>
+          )}
+
+          <NestableDraggableFlatList
+            data={editedExercises}
+            keyExtractor={(ex) => ex.id}
+            onDragBegin={() => setIsDragging(true)}
+            onDragEnd={({ data }) => {
+              setEditedExercises(data);
+              setIsDragging(false);
+            }}
+            activationDistance={Platform.select({ ios: 10, android: 15 })}
+            renderItem={({ item, drag, isActive }: RenderItemParams<WorkoutExercise>) =>
+              renderExerciseCard(item, drag, isActive)
+            }
+          />
+          {actionButtons}
+        </NestableScrollContainer>
 
         {timerActive && (
           <TimerBar
@@ -803,78 +903,7 @@ export default function WorkoutDetailScreen() {
           />
         )}
       </View>
-    );
-  }
-
-  // ── SMALL/MEDIUM SCREEN ──
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={{ paddingHorizontal: horizontalPad, paddingTop: 12, backgroundColor: colors.background }}>
-        {progressCard}
-      </View>
-      <NestableScrollContainer
-        style={styles.container}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: bottomPad, paddingHorizontal: horizontalPad },
-        ]}
-      >
-        {headerCard}
-
-        {workout.notes && (
-          <View style={[styles.notesCard, { backgroundColor: colors.cardAlt }]}>
-            <Ionicons name="document-text-outline" size={16} color={colors.textSub} />
-            <Text style={[styles.notesText, { color: colors.textSub }]}>{workout.notes}</Text>
-          </View>
-        )}
-
-        <NestableDraggableFlatList
-          data={editedExercises}
-          keyExtractor={(ex) => ex.id}
-          onDragEnd={({ data }) => setEditedExercises(data)}
-          renderItem={({ item, drag, isActive }: RenderItemParams<WorkoutExercise>) =>
-            renderExerciseCard(item, drag, isActive)
-          }
-        />
-        {actionButtons}
-      </NestableScrollContainer>
-
-      {timerActive && (
-        <TimerBar
-          timerSeconds={timerSeconds}
-          timerProgress={timerProgress}
-          timerDuration={timerDuration}
-          insets={insets}
-          colors={colors}
-          onSkip={skipTimer}
-          onReset={resetTimer}
-          onAdjust={adjustTimerSeconds}
-        />
-      )}
-
-      {changeTargetExId && (
-        <ExerciseChangeModal
-          targetWexId={changeTargetExId}
-          editedExercises={editedExercises}
-          customAlternatives={customAlternatives}
-          onClose={() => setChangeTargetExId(null)}
-          onConfirm={handleChangeExercise}
-          colors={colors}
-        />
-      )}
-
-      {showAddExModal && (
-        <AddExerciseModal
-          search={addExSearch}
-          onSearchChange={setAddExSearch}
-          candidates={addExCandidates}
-          onSelect={handleAddExercise}
-          onClose={() => { setShowAddExModal(false); setAddExSearch(''); }}
-          colors={colors}
-        />
-      )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

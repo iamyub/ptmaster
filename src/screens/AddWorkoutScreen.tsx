@@ -64,6 +64,7 @@ export default function AddWorkoutScreen() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [saving, setSaving] = useState(false);
   const [pastWorkouts, setPastWorkouts] = useState<Workout[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // 과거 운동 기록 및 루틴 로드
   useEffect(() => {
@@ -195,14 +196,23 @@ export default function AddWorkoutScreen() {
     }
   };
 
+  const removeExercise = (exIdx: number) => {
+    setExercises((prev) => prev.filter((_, i) => i !== exIdx));
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <NestableScrollContainer
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={!isDragging}
+          bounces={!isDragging}
+        >
           <TextInput
             style={[styles.titleInput, { backgroundColor: colors.card, color: colors.text }]}
             value={title}
@@ -226,7 +236,12 @@ export default function AddWorkoutScreen() {
           <NestableDraggableFlatList
             data={exercises}
             keyExtractor={(item) => item.id}
-            onDragEnd={({ data }) => setExercises(data)}
+            onDragBegin={() => setIsDragging(true)}
+            onDragEnd={({ data }) => {
+              setExercises(data);
+              setIsDragging(false);
+            }}
+            activationDistance={Platform.select({ ios: 10, android: 15 })}
             renderItem={({ item: ex, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
               const exIdx = exercises.findIndex((e) => e.id === ex.id);
               const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
