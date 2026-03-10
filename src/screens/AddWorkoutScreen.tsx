@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -273,89 +273,91 @@ export default function AddWorkoutScreen() {
               const lastSets = findLastSets(pastWorkouts, ex.exercise.id);
               const hasPrev = lastSets.length > 0 && !routineExercises;
               return (
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onLongPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                    drag();
-                  }}
-                  delayLongPress={350}
-                  style={[
-                    styles.exerciseBlock,
-                    { backgroundColor: colors.card },
-                    isActive && styles.exerciseBlockDragging,
-                  ]}
-                >
-                  <View style={styles.exerciseHeader}>
-                    <View style={styles.exerciseTitleArea}>
-                      <Text style={[styles.exerciseName, { color: colors.text }]}>
-                        {ex.exercise.name}
-                      </Text>
-                      {hasPrev && (
-                        <Text style={styles.prevHint}>
-                          이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
+                <ScaleDecorator>
+                  <TouchableOpacity
+                    activeOpacity={1}
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                      drag();
+                    }}
+                    delayLongPress={350}
+                    style={[
+                      styles.exerciseBlock,
+                      { backgroundColor: colors.card },
+                      isActive && styles.exerciseBlockDragging,
+                    ]}
+                  >
+                    <View style={styles.exerciseHeader}>
+                      <View style={styles.exerciseTitleArea}>
+                        <Text style={[styles.exerciseName, { color: colors.text }]}>
+                          {ex.exercise.name}
                         </Text>
-                      )}
-                    </View>
-                    <TouchableOpacity onPress={() => removeExercise(exIdx)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* 세트 헤더 */}
-                  <View style={styles.setHeader}>
-                    <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
-                    <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
-                    <View style={styles.setHeaderSep} />
-                    <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
-                    <View style={{ width: 28 }} />
-                  </View>
-
-                  {ex.sets.map((s, setIdx) => (
-                    <View key={s.id} style={styles.setRow}>
-                      <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
-                      <SetStepper
-                        value={s.weight}
-                        onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
-                        step={5}
-                      />
-                      <View style={styles.setColGap} />
-                      <SetStepper
-                        value={s.reps}
-                        onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
-                        step={1}
-                      />
-                      <TouchableOpacity
-                        style={styles.setDeleteBtn}
-                        onPress={() => removeSet(exIdx, setIdx)}
-                        disabled={ex.sets.length <= 1}
-                      >
-                        <Ionicons
-                          name="remove-circle-outline"
-                          size={20}
-                          color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
-                        />
+                        {hasPrev && (
+                          <Text style={styles.prevHint}>
+                            이전: {lastSets[0].weight}kg × {lastSets[0].reps}회
+                          </Text>
+                        )}
+                      </View>
+                      <TouchableOpacity onPress={() => removeExercise(exIdx)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="trash-outline" size={20} color="#FF5C5C" />
                       </TouchableOpacity>
                     </View>
-                  ))}
 
-                  <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
-                    <Ionicons name="add" size={16} color="#4F8EF7" />
-                    <Text style={styles.addSetText}>세트 추가</Text>
+                    {/* 세트 헤더 */}
+                    <View style={styles.setHeader}>
+                      <Text style={[styles.setHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                      <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
+                      <View style={styles.setHeaderSep} />
+                      <Text style={[styles.setHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
+                      <View style={{ width: 28 }} />
+                    </View>
+
+                    {ex.sets.map((s, setIdx) => (
+                      <View key={s.id} style={styles.setRow}>
+                        <Text style={[styles.setNumber, { color: colors.textSub }]}>{setIdx + 1}</Text>
+                        <SetStepper
+                          value={s.weight}
+                          onChange={(v) => updateSetField(exIdx, setIdx, 'weight', v)}
+                          step={5}
+                        />
+                        <View style={styles.setColGap} />
+                        <SetStepper
+                          value={s.reps}
+                          onChange={(v) => updateSetField(exIdx, setIdx, 'reps', v)}
+                          step={1}
+                        />
+                        <TouchableOpacity
+                          style={styles.setDeleteBtn}
+                          onPress={() => removeSet(exIdx, setIdx)}
+                          disabled={ex.sets.length <= 1}
+                        >
+                          <Ionicons
+                            name="remove-circle-outline"
+                            size={20}
+                            color={ex.sets.length <= 1 ? '#ddd' : '#FF5C5C'}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
+                      <Ionicons name="add" size={16} color="#4F8EF7" />
+                      <Text style={styles.addSetText}>세트 추가</Text>
+                    </TouchableOpacity>
+
+                    <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
+                      <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
+                      <TextInput
+                        style={[styles.exNoteInput, { color: colors.text }]}
+                        value={ex.notes || ''}
+                        onChangeText={(text) => updateExerciseNote(exIdx, text)}
+                        placeholder="운동 메모..."
+                        placeholderTextColor={colors.textMuted}
+                        multiline
+                      />
+                    </View>
                   </TouchableOpacity>
-
-                  <View style={[styles.exNoteContainer, { borderTopColor: colors.border }]}>
-                    <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
-                    <TextInput
-                      style={[styles.exNoteInput, { color: colors.text }]}
-                      value={ex.notes || ''}
-                      onChangeText={(text) => updateExerciseNote(exIdx, text)}
-                      placeholder="운동 메모..."
-                      placeholderTextColor={colors.textMuted}
-                      multiline
-                    />
-                  </View>
-                </TouchableOpacity>
+                </ScaleDecorator>
               );
             }}
           />

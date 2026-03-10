@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -781,42 +781,43 @@ export default function WorkoutDetailScreen() {
                     const exDone = ex.sets.filter((s) => s.completed).length;
                     const isSelected = ex.id === selectedEx?.id;
                     return (
-                      <TouchableOpacity
-                        activeOpacity={1}
-                        onLongPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                          drag();
-                        }}
-                        delayLongPress={350}
-                        key={ex.id}
-                        style={[
-                          styles.sidebarItem,
-                          {
-                            backgroundColor: isActive ? colors.primaryBg : isSelected ? colors.primaryBg : colors.background,
-                            borderColor: isSelected ? '#4F8EF7' : 'transparent',
-                            opacity: isActive ? 0.7 : 1,
-                          },
-                        ]}
-                        onPress={() => setSelectedExId(ex.id)}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
-                            numberOfLines={1}
-                          >
-                            {displayName(ex.exercise)}
-                          </Text>
-                          <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
-                            {exDone}/{ex.sets.length} 세트
-                          </Text>
-                        </View>
-                        {exDone === ex.sets.length && ex.sets.length > 0 && (
-                          <Ionicons name="checkmark-circle" size={18} color="#34C759" />
-                        )}
-                      </TouchableOpacity>
+                      <ScaleDecorator>
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onLongPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                            drag();
+                          }}
+                          delayLongPress={350}
+                          key={ex.id}
+                          style={[
+                            styles.sidebarItem,
+                            {
+                              backgroundColor: isActive ? colors.primaryBg : isSelected ? colors.primaryBg : colors.background,
+                              borderColor: isSelected ? '#4F8EF7' : 'transparent',
+                              opacity: isActive ? 0.7 : 1,
+                            },
+                          ]}
+                          onPress={() => setSelectedExId(ex.id)}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[styles.sidebarItemName, { color: isSelected ? '#4F8EF7' : colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {displayName(ex.exercise)}
+                            </Text>
+                            <Text style={[styles.sidebarItemSets, { color: colors.textSub }]}>
+                              {exDone}/{ex.sets.length} 세트
+                            </Text>
+                          </View>
+                          {exDone === ex.sets.length && ex.sets.length > 0 && (
+                            <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+                          )}
+                        </TouchableOpacity>
+                      </ScaleDecorator>
                     );
-                  }}
-                />
+                  }}                />
               </NestableScrollContainer>
             </View>
 
@@ -906,9 +907,11 @@ export default function WorkoutDetailScreen() {
               setIsDragging(false);
             }}
             activationDistance={Platform.select({ ios: 10, android: 15 })}
-            renderItem={({ item, drag, isActive }: RenderItemParams<WorkoutExercise>) =>
-              renderExerciseCard(item, drag, isActive)
-            }
+            renderItem={({ item, drag, isActive }: RenderItemParams<WorkoutExercise>) => (
+              <ScaleDecorator>
+                {renderExerciseCard(item, drag, isActive)}
+              </ScaleDecorator>
+            )}
           />
           {actionButtons}
         </NestableScrollContainer>

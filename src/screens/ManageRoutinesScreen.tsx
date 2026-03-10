@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import { RenderItemParams, NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 import { showAlert } from '../utils/alert';
 import { RootStackParamList, Routine, RoutineExercise, RoutineSet, Exercise } from '../types';
@@ -267,81 +267,83 @@ export default function ManageRoutinesScreen() {
           const exercise = DEFAULT_EXERCISES.find((e) => e.id === re.exerciseId);
           if (!exercise) return null;
           return (
-            <TouchableOpacity
-              activeOpacity={1}
-              onLongPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                drag();
-              }}
-              delayLongPress={350}
-              style={[
-                styles.formExerciseBlock,
-                { backgroundColor: colors.cardAlt, borderLeftColor: colors.primary },
-                isActive && styles.formExerciseBlockDragging,
-                isActive && { opacity: 0.72, transform: [{ scale: 0.95 }] },
-              ]}
-            >
-                <View style={styles.formExerciseHeader}>
-                  <View style={styles.formExerciseInfo}>
-                    <Text style={[styles.formExerciseName, { color: colors.text }]}>
-                      {exercise.name}
-                    </Text>
-                    <Text style={[styles.formExerciseMuscle, { color: colors.textSub }]}>
-                      {[exercise.equipment, exercise.description].filter(Boolean).join(' · ')}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => removeExercise(re.exerciseId)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.setEditor}>
-                  <View style={styles.setEditorHeader}>
-                    <Text style={[styles.setEditorHeaderNum, { color: colors.textMuted }]}>세트</Text>
-                    <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
-                    <View style={{ width: 8 }} />
-                    <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
-                    <View style={{ width: 28 }} />
-                  </View>
-
-                  {re.sets.map((s, setIdx) => (
-                    <View key={setIdx} style={styles.setEditorRow}>
-                      <Text style={[styles.setEditorNum, { color: colors.textSub }]}>{setIdx + 1}</Text>
-                      <SetStepper
-                        value={s.weight}
-                        onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'weight', v)}
-                        step={5}
-                      />
-                      <View style={{ width: 8 }} />
-                      <SetStepper
-                        value={s.reps}
-                        onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'reps', v)}
-                        step={1}
-                        min={1}
-                      />
-                      <TouchableOpacity
-                        style={styles.setEditorDeleteBtn}
-                        onPress={() => removeFormSet(re.exerciseId, setIdx)}
-                        disabled={re.sets.length <= 1}
-                      >
-                        <Ionicons
-                          name="remove-circle-outline"
-                          size={18}
-                          color={re.sets.length <= 1 ? colors.textMuted : colors.destructive}
-                        />
-                      </TouchableOpacity>
+            <ScaleDecorator>
+              <TouchableOpacity
+                activeOpacity={1}
+                onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  drag();
+                }}
+                delayLongPress={350}
+                style={[
+                  styles.formExerciseBlock,
+                  { backgroundColor: colors.cardAlt, borderLeftColor: colors.primary },
+                  isActive && styles.formExerciseBlockDragging,
+                  isActive && { opacity: 0.72 },
+                ]}
+              >
+                  <View style={styles.formExerciseHeader}>
+                    <View style={styles.formExerciseInfo}>
+                      <Text style={[styles.formExerciseName, { color: colors.text }]}>
+                        {exercise.name}
+                      </Text>
+                      <Text style={[styles.formExerciseMuscle, { color: colors.textSub }]}>
+                        {[exercise.equipment, exercise.description].filter(Boolean).join(' · ')}
+                      </Text>
                     </View>
-                  ))}
+                    <TouchableOpacity
+                      onPress={() => removeExercise(re.exerciseId)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                    </TouchableOpacity>
+                  </View>
 
-                  <TouchableOpacity style={styles.addSetBtn} onPress={() => addFormSet(re.exerciseId)}>
-                    <Ionicons name="add" size={14} color={colors.primary} />
-                    <Text style={[styles.addSetText, { color: colors.primary }]}>세트 추가</Text>
-                  </TouchableOpacity>
-                </View>
-            </TouchableOpacity>
+                  <View style={styles.setEditor}>
+                    <View style={styles.setEditorHeader}>
+                      <Text style={[styles.setEditorHeaderNum, { color: colors.textMuted }]}>세트</Text>
+                      <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>무게 (kg)</Text>
+                      <View style={{ width: 8 }} />
+                      <Text style={[styles.setEditorHeaderLabel, { color: colors.textMuted }]}>횟수</Text>
+                      <View style={{ width: 28 }} />
+                    </View>
+
+                    {re.sets.map((s, setIdx) => (
+                      <View key={setIdx} style={styles.setEditorRow}>
+                        <Text style={[styles.setEditorNum, { color: colors.textSub }]}>{setIdx + 1}</Text>
+                        <SetStepper
+                          value={s.weight}
+                          onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'weight', v)}
+                          step={5}
+                        />
+                        <View style={{ width: 8 }} />
+                        <SetStepper
+                          value={s.reps}
+                          onChange={(v) => updateFormSet(re.exerciseId, setIdx, 'reps', v)}
+                          step={1}
+                          min={1}
+                        />
+                        <TouchableOpacity
+                          style={styles.setEditorDeleteBtn}
+                          onPress={() => removeFormSet(re.exerciseId, setIdx)}
+                          disabled={re.sets.length <= 1}
+                        >
+                          <Ionicons
+                            name="remove-circle-outline"
+                            size={18}
+                            color={re.sets.length <= 1 ? colors.textMuted : colors.destructive}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <TouchableOpacity style={styles.addSetBtn} onPress={() => addFormSet(re.exerciseId)}>
+                      <Ionicons name="add" size={14} color={colors.primary} />
+                      <Text style={[styles.addSetText, { color: colors.primary }]}>세트 추가</Text>
+                    </TouchableOpacity>
+                  </View>
+              </TouchableOpacity>
+            </ScaleDecorator>
           );
         }}
       />
