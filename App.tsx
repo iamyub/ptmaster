@@ -299,7 +299,7 @@ function AppInner() {
             <Stack.Screen
               name="AddWorkout"
               component={AddWorkoutScreen}
-              options={{ title: '운동 추가', presentation: 'modal' }}
+              options={{ title: '운동 추가' }}
             />
             <Stack.Screen
               name="WorkoutDetail"
